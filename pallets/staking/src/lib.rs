@@ -35,6 +35,8 @@ mod mock;
 mod tests;
 #[cfg(test)]
 mod tests_calls;
+#[cfg(test)]
+mod tests_audits;
 
 pub mod weights;
 pub use weights::*;
@@ -65,8 +67,7 @@ pub mod pallet {
 
 	/// Runtime configuration
 	#[pallet::config]
-	pub trait Config: pallet_balances::Config + 
-		pallet_collator_selection::Config + 
+	pub trait Config: pallet_collator_selection::Config + 
 		pallet_aura::Config + 
 		pallet_authorship::Config + 
 		pallet_session::Config + 
@@ -289,12 +290,16 @@ pub mod pallet {
 			match NextBlockNumber::<T>::get() {
 				Some(_next_block) => {
 					// Todo, since this is replaced by session
-					T::DbWeight::get().reads(1)
+
+					// Weights covers authoring
+					T::DbWeight::get().reads_writes(2, 2)
 				}
 				None => {
 					// At block zero
 					Self::add_xaver_nodes();
-					T::DbWeight::get().reads(1)
+
+					// Weights covers desired and waiting from xaver node setup (14 nodes)
+					T::DbWeight::get().reads_writes(14, 28)
 				}
 			}
 		}
@@ -364,30 +369,44 @@ pub mod pallet {
 				ensure!(!pallet_collator_selection::Invulnerables::<T>::get().contains(&who), Error::<T>::InvulernableMember);
 				ensure!(!Self::still_authoring(who.clone()), Error::<T>::AuraAuthorityMember);
 			} else {
-				ensure!(T::StakingCurrency::free_balance(&who) >= new_bond, Error::<T>::ProposedCandidateInsufficientBalance);
+				let candidates = ProposedCandidates::<T>::get();
+				if let Some(candidate) = candidates.iter().find(|c| c.who == who) {
+					if candidate.bond == Zero::zero() {
+						ensure!(T::StakingCurrency::free_balance(&who) >= new_bond,Error::<T>::ProposedCandidateInsufficientBalance);
+					}
+				}
 			}
-
-			ProposedCandidates::<T>::mutate(|candidates| {
+			
+			let _ = ProposedCandidates::<T>::mutate(|candidates| {
 				if let Some(candidate) = candidates.iter_mut().find(|c| c.who == who) {
-					if candidate.bond > new_bond {
-						// Decrease the bond and reserve or might leave (new bond == 0)
-						// Unreserve the difference, of the new bond is 0, unreserve the whole bond because the bond difference
-						// is equal to the existing bond because any number subtracted by 0 would remain the same.
-						let bond_diff = candidate.bond.saturating_sub(new_bond);
+
+					// If the current bond is zero the new bond is immediately reserved
+					if candidate.bond == Zero::zero() {
 						candidate.bond = new_bond;
-						if bond_diff > Zero::zero() {
-							T::StakingCurrency::unreserve(&who, bond_diff);
-						}
+						candidate.last_updated = frame_system::Pallet::<T>::block_number();
+
+						let _ = T::StakingCurrency::reserve(&who, new_bond);
+
 					} else {
-						// Increase the bond and reserve.  If the new bond is greater than the existing bond then just replace
-						// the current bond with the new one and get the difference to increase the reserve.
-						let bond_diff = new_bond.saturating_sub(candidate.bond);
-						candidate.bond = new_bond;
-						if bond_diff > Zero::zero() {
+						// If the current bond exceeds the new bond - unreserve
+						if candidate.bond > new_bond {
+							let bond_diff = candidate.bond.saturating_sub(new_bond);
+
+							candidate.bond = new_bond;
+							candidate.last_updated = frame_system::Pallet::<T>::block_number();
+
+							let _ = T::StakingCurrency::unreserve(&who, bond_diff);
+						
+						// If the new bond exceeds than the current bond - add to reserve
+						} else if new_bond > candidate.bond {
+							let bond_diff = new_bond.saturating_sub(candidate.bond);
+
+							candidate.bond = new_bond;
+							candidate.last_updated = frame_system::Pallet::<T>::block_number();
+
 							let _ = T::StakingCurrency::reserve(&who, bond_diff);
 						}
 					}
-					candidate.last_updated = frame_system::Pallet::<T>::block_number();
 				}
 			});
 
@@ -939,7 +958,7 @@ pub mod pallet {
 				ProposedCandidates::<T>::mutate(|candidates| {
 					if let Some(candidate) = candidates.iter_mut().find(|c| c.who == waiting_candidate) {
 						if candidate.status == Status::Waiting {
-							let _ = candidate.status == Status::Queuing;
+							candidate.status = Status::Queuing;
 						}
 					}
 				});

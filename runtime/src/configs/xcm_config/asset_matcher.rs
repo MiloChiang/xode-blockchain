@@ -36,6 +36,11 @@ impl MatchesFungibles<u32, Balance> for AssetMatcher {
             } => match junctions.as_ref() {
                 [Junction::Parachain(1000), Junction::PalletInstance(50), Junction::GeneralIndex(asset_id)] =>
                 {
+                    if *asset_id == 100_000_000 {
+                        log::warn!(target: "xcm::matches_fungibles", "AssetMatcher: Blocked AssetHub asset with DOT ID collision");
+                        return Err(MatchError::AssetNotHandled);
+                    }
+
                     log::trace!(target: "xcm::matches_fungibles", "AssetMatcher: Matched AssetHub asset → asset_id: {:?}, amount: {:?}", asset_id, amount);
                     Ok((*asset_id as u32, *amount))
                 }

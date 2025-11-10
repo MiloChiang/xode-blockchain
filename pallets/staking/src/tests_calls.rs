@@ -190,6 +190,7 @@ fn test_pallet_xode_staking_bond_candidate_decreases_bond_and_unreserves() {
 
         // Bond the candidate
 		assert_ok!(XodeStaking::bond_candidate(RuntimeOrigin::signed(candidate), 200));
+        assert_eq!(800, Balances::free_balance(&candidate), "Should have 800 free balance.");
 
         let candidates = ProposedCandidates::<Test>::get();
         if let Some(candidate_info) = candidates.iter().find(|c| c.who == candidate) {    
@@ -215,6 +216,7 @@ fn test_pallet_xode_staking_bond_candidate_insufficient_balance_should_error() {
 
         // Register the candidate
         assert_ok!(XodeStaking::register_candidate(RuntimeOrigin::signed(candidate)));
+        assert_eq!(0, Balances::free_balance(&candidate), "Should have 0 free balance.");
 
         // Bond the candidate with insufficient balance should error
         assert_noop!(

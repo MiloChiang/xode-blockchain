@@ -13,7 +13,8 @@ use crate::{
     XcmpQueue,
 
     // XCM config modules
-    configs::xcm_config::asset_matcher::{AssetMatcher, TrustedReserveAssets},
+    configs::xcm_config::asset_matcher::AssetMatcher,
+    configs::xcm_config::trusted_reserve_assets::TrustedReserveAssets,
     configs::xcm_config::origin_filters::ParentOrTrustedSiblings,
     configs::xcm_config::weight_trader::DynamicWeightTrader,
 };
@@ -29,7 +30,7 @@ use xcm::latest::prelude::*;
 use xcm_builder::{
     AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowSubscriptionsFrom,
     AllowTopLevelPaidExecutionFrom, DenyReserveTransferToRelayChain, DenyThenTry, EnsureXcmOrigin,
-    FixedWeightBounds, FrameTransactionalProcessor, FungiblesAdapter, LocalMint, ParentIsPreset,
+    FixedWeightBounds, FrameTransactionalProcessor, FungibleAdapter, FungiblesAdapter, LocalMint, ParentIsPreset,
     RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
     SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
     TrailingSetTopicAsId, WithComputedOrigin, WithUniqueTopic,
@@ -60,14 +61,31 @@ pub type LocationToAccountId = (
     AccountId32Aliases<RelayNetwork, AccountId>,
 );
 
-/// The `AssetTransactor` defines how the runtime handles fungible assets received or sent via XCM.
-/// It interprets incoming `Asset` locations, resolves them to local asset IDs and balances,
-/// and executes operations such as minting, burning, or transferring tokens.
-pub type AssetTransactor = FungiblesAdapter<
-    // The asset handler used to inspect, mint, and burn tokens (e.g., orml-tokens or pallet-assets).
+/// The asset transactor for handling the local native asset.
+/// 
+/// This supports only the native token of this parachain.
+/// It uses the `Balances` pallet to manage the native currency.
+pub type LocalAssetTransactor = FungibleAdapter<
+    // The asset handler for the native currency (Balances pallet).
+	Balances,
+    // Our custom asset matcher for the native token.
+	AssetMatcher,
+    // Resolves `Location` origin accounts into native `AccountId`s.
+	LocationToAccountId,
+	// Our chain's account ID type (we can't get away without mentioning it explicitly):
+	AccountId,
+	// We don't track any teleports.
+	(),
+>;
+
+/// The asset transactor for handling assets via pallet-assets.
+/// 
+/// This supports assets from the Relay Chain, sibling parachains (e.g., AssetHub),
+/// and local pallet-assets defined on this parachain.
+pub type PalletAssetsTransactor = FungiblesAdapter<
+    // The asset handler used to inspect, mint, and burn tokens (pallet-assets).
     Assets,
-    // Custom matcher for converting incoming `Asset` to local (asset ID, balance) pairs.
-    // This supports Relay Chain, sibling parachains, or AssetHub assets.
+    // Our custom asset matcher for various fungible assets.
     AssetMatcher,
     // Resolves `Location` origin accounts into native `AccountId`s.
     LocationToAccountId,
@@ -80,6 +98,13 @@ pub type AssetTransactor = FungiblesAdapter<
     // Prevents unwanted account creation unless explicitly allowed by policies.
     CheckingAccount,
 >;
+
+/// The overall asset transactor for XCM, combining local native asset handling
+/// and pallet-assets handling for other fungible assets.
+pub type AssetTransactor = (
+    LocalAssetTransactor,
+    PalletAssetsTransactor
+);
 
 /// This is the type we use to convert an (incoming) XCM origin into a local Origin instance,
 /// ready for dispatching a transaction with Xcm's Transact. There is an OriginKind which can

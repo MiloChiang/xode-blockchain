@@ -62,7 +62,7 @@ use frame_support::{
 	genesis_builder_helper::{build_state, get_preset},
 	weights::{
 		constants::WEIGHT_REF_TIME_PER_SECOND, Weight, WeightToFeeCoefficient, WeightToFeeCoefficients,
-		WeightToFeePolynomial,
+		WeightToFeePolynomial, WeightToFee as WeightToFeeT,
 	},
 };
 
@@ -78,19 +78,17 @@ use configs::{
 	RuntimeBlockWeights,
 	xcm_config::{
 		RelayLocation, XcmConfig, XcmRouter, LocationToAccountId,
-		weight_trader::DynamicWeightTrader
+		weight_trader::UsdtWeightToFee
 	}
 };
 
 use xcm::{
 	latest::prelude::{
-		Asset, AssetId, Junctions, Junction, Location,
-		XcmContext, XcmHash, 
+		AssetId, Junctions, Junction, Location,
 	},
 	Version as XcmVersion, VersionedAssetId, VersionedAssets, VersionedLocation,
 	VersionedXcm,
 };
-use xcm_executor::{traits::WeightTrader, AssetsInHolding};
 use xcm_runtime_apis::{
 	dry_run::{
 		CallDryRunEffects as ApiCallDryRunEffects, 
@@ -773,37 +771,42 @@ impl_runtime_apis! {
 				.map_err(|_| XcmPaymentApiError::WeightNotComputable)
 		}
 
-		// This implementation is based on the approach taken in the latest version of pallet-xcm.
-		// Reference: https://docs.rs/pallet-xcm/22.0.1/src/pallet_xcm/lib.rs.html#3223
-		//
-		// The version of pallet-xcm currently used in this chain is outdated and does not yet
-		// provide this functionality. To bridge the gap, we implemented `query_weight_to_asset_fee`
-		// in our runtime by following the design from `xcm-runtime-apis` and aligning it with the
-		// approach used upstream.
-		//
-		// Once the chain upgrades to a newer release of pallet-xcm, this implementation can be
-		// revisited to determine whether it should be replaced with the upstream version.
 		fn query_weight_to_asset_fee(weight: Weight, asset: VersionedAssetId) -> Result<u128, XcmPaymentApiError> {
-			let asset: AssetId = asset.clone().try_into()
-        		.map_err(|_| XcmPaymentApiError::VersionedConversionFailed)?;
+			// Convert VersionedAssetId to AssetId
+			let asset: AssetId = asset.clone()
+                .try_into()
+                .map_err(|_| XcmPaymentApiError::VersionedConversionFailed)?;
 
-			let max_amount = u128::MAX / 2;
-			let max_payment: Asset = (asset.clone(), max_amount).into();
-    		let payment = AssetsInHolding::from(max_payment);
-			let context = XcmContext::with_message_id(XcmHash::default());
+            // Add the fixed fee (0.01 DOT or USDT, depending on asset)
+            let fee_amount: u128 = match asset {
+                // DOT: Relay chain (10 decimals)
+                AssetId(Location {
+                    parents: 1,
+                    interior: Junctions::Here,
+                }) => {
+                    <WeightToFee as WeightToFeeT>::weight_to_fee(&weight).saturating_add(100_000_000)
+                }, // weight fee + 0.01 DOT
 
-			let mut trader = DynamicWeightTrader::new();
-			let unspent_assets = trader
-				.buy_weight(weight, payment, &context)
-				.map_err(|_| XcmPaymentApiError::WeightNotComputable)?;
+                // USDT: AssetHub (6 decimals)
+                AssetId(Location {
+                    parents: 1,
+                    interior: Junctions::X3(ref junctions),
+                }) if matches!(
+                    junctions.as_ref(),
+                    [
+                        Junction::Parachain(1000),
+                        Junction::PalletInstance(50),
+                        Junction::GeneralIndex(1984)
+                    ]
+                ) => {
+                    UsdtWeightToFee::weight_to_fee(&weight).saturating_add(10_000)
+                }, // weight fee + 0.01 USDT
 
-			let Some(unspent) = unspent_assets.fungible.get(&asset) else {
-				return Err(XcmPaymentApiError::AssetNotFound);
-			};
+                _ => return Err(XcmPaymentApiError::AssetNotFound),
+            };
 
-			let paid = max_amount - unspent;
-
-			Ok(paid)
+            // Ensure the fee does not exceed the maximum payment
+            Ok(fee_amount)
 		}
 
 		fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>) -> Result<VersionedAssets, XcmPaymentApiError> {

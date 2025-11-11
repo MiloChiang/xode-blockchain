@@ -2,20 +2,13 @@ use crate::Balance;
 use xcm::latest::prelude::*;
 use xcm_executor::traits::{Error as MatchError, MatchesFungible, MatchesFungibles};
 
-/// Asset matcher for handling various fungible assets in XCM transactions.
+/// This struct defines a native asset matcher for XCM transactions.
 /// 
-/// This struct implements the `MatchesFungible` and `MatchesFungibles` traits
-/// to match and extract balances for different types of assets, including the
-/// native token of the parachain, assets from the relay chain, and assets from
-/// sibling parachains (e.g., AssetHub).
-pub struct AssetMatcher;
+/// It identifies the native token based on its XCM location and fungibility,
+/// determining if it matches the native asset.
+pub struct NativeAssetMatcher;
 
-/// Implementation of `MatchesFungible` for matching the native token.
-/// 
-/// This implementation checks if the asset is the native token of the parachain
-/// by verifying if its location is `Here` with zero parents. If matched, it
-/// returns the balance amount.
-impl MatchesFungible<Balance> for AssetMatcher {
+impl MatchesFungible<Balance> for NativeAssetMatcher {
     fn matches_fungible(asset: &Asset) -> Option<Balance> {
         match asset {
             // Match the native token
@@ -39,15 +32,17 @@ impl MatchesFungible<Balance> for AssetMatcher {
     }
 }
 
-/// Implementation of `MatchesFungibles` for matching various fungible assets.
+/// This struct defines a multi-asset matcher for XCM transactions.
 /// 
-/// This implementation checks for assets from the local parachain, relay chain,
-/// and sibling parachains (e.g., AssetHub). It returns the corresponding asset ID
-/// and balance if matched.
-impl MatchesFungibles<u32, Balance> for AssetMatcher {
+/// It identifies various fungible assets based on their XCM location and fungibility,
+/// determining if they match known assets and extracting their identifiers and amounts.
+pub struct MultiAssetMatcher;
+
+impl MatchesFungibles<u32, Balance> for MultiAssetMatcher {
     fn matches_fungibles(asset: &Asset) -> Result<(u32, Balance), MatchError> {
         let match_result = match asset {
-            // Match a local parachain (e.g., Xode)
+
+            // Match a local parachain (Xode)
             Asset {
                 id: AssetId(Location {
                     parents: 0,

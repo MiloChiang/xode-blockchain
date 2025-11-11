@@ -13,7 +13,7 @@ use crate::{
     XcmpQueue,
 
     // XCM config modules
-    configs::xcm_config::asset_matcher::AssetMatcher,
+    configs::xcm_config::asset_matcher::{NativeAssetMatcher, MultiAssetMatcher},
     configs::xcm_config::trusted_reserve_assets::TrustedReserveAssets,
     configs::xcm_config::origin_filters::ParentOrTrustedSiblings,
     configs::xcm_config::weight_trader::DynamicWeightTrader,
@@ -69,7 +69,7 @@ pub type LocalAssetTransactor = FungibleAdapter<
     // The asset handler for the native currency (Balances pallet).
 	Balances,
     // Our custom asset matcher for the native token.
-	AssetMatcher,
+	NativeAssetMatcher,
     // Resolves `Location` origin accounts into native `AccountId`s.
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -86,7 +86,7 @@ pub type PalletAssetsTransactor = FungiblesAdapter<
     // The asset handler used to inspect, mint, and burn tokens (pallet-assets).
     Assets,
     // Our custom asset matcher for various fungible assets.
-    AssetMatcher,
+    MultiAssetMatcher,
     // Resolves `Location` origin accounts into native `AccountId`s.
     LocationToAccountId,
     // Native account identifier type used by the runtime.

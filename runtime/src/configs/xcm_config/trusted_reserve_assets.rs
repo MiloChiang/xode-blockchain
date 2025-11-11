@@ -56,10 +56,7 @@ impl ContainsPair<Asset, Location> for TrustedReserveAssets {
                         ]
                     ) => true,
 
-                    _ => {
-                        log::trace!(target: "xcm::contains_pair", "TrustedReserveAssets::contains - asset mismatch → asset: {:?}, origin: {:?}", asset, origin);
-                        false
-                    }
+                    _ => false
                 },
 
                 // Match Hydration (parachain 2034) origin.

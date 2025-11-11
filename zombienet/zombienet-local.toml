@@ -23,18 +23,28 @@ chain = "rococo-local"
   name = "dave"
   validator = true
 
-# [[parachains]]
-# id = 1000
-# cumulus_based = true
+[[parachains]]
+id = 1000
+cumulus_based = true
 
-#   [[parachains.collators]]
-#   name = "assethub-collator"
-#   command = "./bin/polkadot-parachain"
-#   args = ["-lxcmp=trace", "-lxcm=trace", "-lruntime=debug"]
-#   ws_port = 9988
+  [[parachains.collators]]
+  name = "dummy-assethub-collator"
+  command = "../target/release/xode-node"
+  args = ["-lxcmp=trace", "-lxcm=trace", "-lruntime=debug"]
+  ws_port = 9977
 
 [[parachains]]
-id = 4607
+id = 2034
+cumulus_based = true
+
+  [[parachains.collators]]
+  name = "dummy-parachain-collator"
+  command = "../target/release/xode-node"
+  args = ["-lxcmp=trace", "-lxcm=trace", "-lruntime=debug"]
+  ws_port = 9988
+
+[[parachains]]
+id = 3417
 cumulus_based = true
 
   [[parachains.collators]]

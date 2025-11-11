@@ -62,7 +62,7 @@ use frame_support::{
 	genesis_builder_helper::{build_state, get_preset},
 	weights::{
 		constants::WEIGHT_REF_TIME_PER_SECOND, Weight, WeightToFeeCoefficient, WeightToFeeCoefficients,
-		WeightToFeePolynomial, WeightToFee as WeightToFeeT,
+		WeightToFeePolynomial, WeightToFee as WeightToFeeConversion,
 	},
 };
 
@@ -77,8 +77,8 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use configs::{
 	RuntimeBlockWeights,
 	xcm_config::{
-		RelayLocation, XcmConfig, XcmRouter, LocationToAccountId,
-		weight_trader::UsdtWeightToFee
+		XcmConfig, XcmRouter, LocationToAccountId,
+		weight_trader::{WeightToFeeConverter, XonWeightToFeeRate, DotWeightToFeeRate, UsdtWeightToFeeRate}
 	}
 };
 
@@ -752,7 +752,20 @@ impl_runtime_apis! {
 	impl xcm_runtime_apis::fees::XcmPaymentApi<Block> for Runtime {
 		fn query_acceptable_payment_assets(xcm_version: xcm::Version) -> Result<Vec<VersionedAssetId>, XcmPaymentApiError> {
 			let mut acceptable_assets: Vec<AssetId> = Vec::new();
-			acceptable_assets.push(AssetId(RelayLocation::get()));
+
+			// XON: Xode native token
+			acceptable_assets.push(AssetId(Location {
+				parents: 0,
+				interior: Junctions::Here,
+			}));
+
+			// DOT: Relay chain native token
+			acceptable_assets.push(AssetId(Location {
+				parents: 1,
+				interior: Junctions::Here,
+			}));
+
+			// USDT: AssetHub parachain asset (1984)
 			acceptable_assets.push(AssetId(Location {
 				parents: 1,
 				interior: Junctions::X3(Arc::from([
@@ -778,16 +791,20 @@ impl_runtime_apis! {
                 .map_err(|_| XcmPaymentApiError::VersionedConversionFailed)?;
 
             // Add the fixed fee (0.01 DOT or USDT, depending on asset)
-            let fee_amount: u128 = match asset {
-                // DOT: Relay chain (10 decimals)
+            let total_fee: u128 = match asset {
+				// XON: local chain (12 decimals -> 0.01 XON = 10_000_000_000)
+                AssetId(Location {
+                    parents: 0,
+                    interior: Junctions::Here,
+                }) => WeightToFeeConverter::<XonWeightToFeeRate>::weight_to_fee(&weight).saturating_add(10_000_000_000u128),
+
+				// DOT: Relay chain (10 decimals -> 0.01 DOT = 100_000_000)
                 AssetId(Location {
                     parents: 1,
                     interior: Junctions::Here,
-                }) => {
-                    <WeightToFee as WeightToFeeT>::weight_to_fee(&weight).saturating_add(100_000_000)
-                }, // weight fee + 0.01 DOT
+                }) => WeightToFeeConverter::<DotWeightToFeeRate>::weight_to_fee(&weight).saturating_add(100_000_000u128),
 
-                // USDT: AssetHub (6 decimals)
+				// USDT: AssetHub parachain asset (1984) (6 decimals -> 0.01 USDT = 10_000)
                 AssetId(Location {
                     parents: 1,
                     interior: Junctions::X3(ref junctions),
@@ -798,15 +815,13 @@ impl_runtime_apis! {
                         Junction::PalletInstance(50),
                         Junction::GeneralIndex(1984)
                     ]
-                ) => {
-                    UsdtWeightToFee::weight_to_fee(&weight).saturating_add(10_000)
-                }, // weight fee + 0.01 USDT
+                ) => WeightToFeeConverter::<UsdtWeightToFeeRate>::weight_to_fee(&weight).saturating_add(10_000u128),
 
                 _ => return Err(XcmPaymentApiError::AssetNotFound),
             };
 
             // Ensure the fee does not exceed the maximum payment
-            Ok(fee_amount)
+            Ok(total_fee)
 		}
 
 		fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>) -> Result<VersionedAssets, XcmPaymentApiError> {

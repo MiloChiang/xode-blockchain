@@ -1,4 +1,4 @@
-use crate::{WeightToFee, configs::xcm_config::AssetTransactor};
+use crate::{configs::xcm_config::AssetTransactor};
 use frame_support::{
     parameter_types,
     weights::{Weight, WeightToFee as WeightToFeeT},
@@ -10,47 +10,68 @@ use xcm_executor::{
 };
 use alloc::sync::Arc;
 use sp_core::crypto::{Ss58Codec, AccountId32};
+use core::marker::PhantomData;
 
 parameter_types! {
 	pub const RelayLocation: Location = Location::parent();
 }
 
-/// A weight to fee implementation for USDT, which is used to convert weight into a fee
-/// that can be paid in USDT. This implementation is specifically designed to handle
-/// the conversion of weight into a fee amount that can be used for weight purchasing
-/// in the context of XCM transactions.
+/// Trait defining parameters for weight-to-fee conversion for different assets.
 /// 
-/// The fee is calculated based on the weight's reference time, divided by a scaling factor
-/// to convert it into a fee amount in USDT.
-/// 
-/// The scaling factor is set to 1,000,000 to ensure that the fee is reasonable and
-/// can be handled by the USDT asset.
-/// 
-/// This implementation is useful for scenarios where USDT is used as the asset for weight purchasing,
-/// allowing for dynamic handling of weight purchasing based on the available assets in the `AssetsInHolding`.
-pub struct UsdtWeightToFee;
+/// Implementers of this trait specify the fee rate per second for a given asset,
+/// allowing the `WeightToFeeConverter` to calculate the appropriate fee based on
+/// the weight of the XCM execution.
+pub trait WeightToFeeAssetParams {
+	const FEE_PER_SECOND: u128;
+}
 
-impl WeightToFeeT for UsdtWeightToFee {
+/// Weight-to-fee parameters for XON (native token) with a rate of 0.01 XON per second.
+pub struct XonWeightToFeeRate;
+impl WeightToFeeAssetParams for XonWeightToFeeRate {
+	const FEE_PER_SECOND: u128 = 10_000_000_000; 
+}
+
+/// Weight-to-fee parameters for DOT (relay chain token) with a rate of 0.01 DOT per second.
+pub struct DotWeightToFeeRate;
+impl WeightToFeeAssetParams for DotWeightToFeeRate {
+	const FEE_PER_SECOND: u128 = 100_000_000; // 0.01 DOT
+}
+
+/// Weight-to-fee parameters for USDT (AssetHub token) with a rate of 0.01 USDT per second.
+pub struct UsdtWeightToFeeRate;
+impl WeightToFeeAssetParams for UsdtWeightToFeeRate {
+	const FEE_PER_SECOND: u128 = 10_000; // 0.01 USDT
+}
+
+/// A generic weight-to-fee converter that calculates the fee based on the weight
+/// of the XCM execution and the fee rate defined by the implementer of
+/// `WeightToFeeAssetParams`.
+///
+/// This struct uses the `WeightToFeeAssetParams` trait to determine the fee rate
+/// for the specific asset, allowing for flexible fee calculations based on the
+/// asset being used for payment.
+pub struct WeightToFeeConverter<T: WeightToFeeAssetParams>(PhantomData<T>);
+
+impl<T: WeightToFeeAssetParams> WeightToFeeT for WeightToFeeConverter<T> {
 	type Balance = u128;
 
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		weight.ref_time().saturating_div(1_000_000).max(1).into()
+		let picos_per_second: u64 = 1_000_000_000_000u64;
+		let ref_time_picoseconds = weight.ref_time();
+		let fee = ref_time_picoseconds.saturating_mul(T::FEE_PER_SECOND as u64);
+
+		(fee.saturating_div(picos_per_second)) as u128
 	}
 }
 
-/// A dynamic weight trader that determines how to buy weight for XCM execution  
-/// based on the assets provided in the `AssetsInHolding`. This trader supports  
-/// both DOT from the Relay Chain and USDT from AssetHub (parachain 1000).  
-///
-/// It matches assets by their XCM location and uses the corresponding weight-to-fee  
-/// conversion logic to calculate the cost for the requested weight.  
-///
-/// If the asset originates from the Relay Chain, the trader uses DOT for payment.  
-/// If it originates from AssetHub, it uses USDT. The function processes the payment,  
-/// deducts the total fee, and returns any remaining balance to the caller.  
-///
-/// If no supported asset is detected, the trader returns an error indicating that  
-/// the weight purchase cannot be completed.
+/// Dynamic weight trader that calculates fees based on the asset used for payment.
+/// 
+/// It supports XON (native token), DOT (relay chain token), and USDT (AssetHub token).
+/// The fee is calculated based on the weight of the XCM execution and a fixed fee
+/// of 0.01 units of the respective asset.
+/// 
+/// This implementation deducts the required fee from the provided assets and deposits
+/// it to a predefined fee collector account.
 pub struct DynamicWeightTrader;
 
 impl WeightTrader for DynamicWeightTrader {
@@ -71,10 +92,15 @@ impl WeightTrader for DynamicWeightTrader {
 
 		// Check if asset matches USDT on AssetHub (parachain 1000)
 		match asset_id {
+			AssetId(xon_location @ Location {
+				parents: 0,
+				interior: Junctions::Here,
+			}) => handle_payment(xon_location.clone(), payment, WeightToFeeConverter::<XonWeightToFeeRate>::weight_to_fee(&weight)),
+
 			AssetId(dot_location @ Location {
 				parents: 1,
 				interior: Junctions::Here,
-			}) => handle_payment(dot_location.clone(), payment, WeightToFee::weight_to_fee(&weight)),
+			}) => handle_payment(dot_location.clone(), payment, WeightToFeeConverter::<DotWeightToFeeRate>::weight_to_fee(&weight)),
 
 			AssetId(usdt_location @ Location {
 				parents: 1,
@@ -86,7 +112,7 @@ impl WeightTrader for DynamicWeightTrader {
 					Junction::PalletInstance(50),
 					Junction::GeneralIndex(1984)
 				]
-			) => handle_payment(usdt_location.clone(), payment, UsdtWeightToFee::weight_to_fee(&weight)),
+			) => handle_payment(usdt_location.clone(), payment, WeightToFeeConverter::<UsdtWeightToFeeRate>::weight_to_fee(&weight)),
 			
 			_ => {
 				log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - Unsupported asset: {:?}", asset_id);
@@ -100,24 +126,25 @@ impl WeightTrader for DynamicWeightTrader {
 	}
 }
 
-/// Handles a payment for purchasing XCM execution weight, supporting both DOT and USDT.  
-/// The function validates the provided asset balance and ensures it can fully cover the total cost.  
-/// The total fee consists of the required XCM execution fee plus a fixed surcharge of 0.01 (DOT or USDT).  
-///
-/// If the asset originates from the Relay Chain, the payment is processed using DOT.  
-/// If the asset comes from AssetHub (parachain 1000), it is processed using USDT.  
-/// The combined fee amount is then transferred to a predefined receiver account,  
-/// which is converted into an XCM-compatible location for proper asset deposit handling.  
-///
-/// After deducting the total fee (execution fee + 0.01), the function returns any remaining  
-/// balance to the caller. Detailed logging throughout the process ensures transparency  
-/// and simplifies debugging and auditing.
+/// Handles the payment for weight purchase by deducting the required fee
+/// from the provided assets and depositing it to the fee collector.
+/// 
+/// The function calculates the total fee based on the provided `fee_amount`
+/// and a fixed fee of 0.01 units of the asset. It then deducts this total fee
+/// from the `payment` assets. If successful, it deposits the fee to a predefined
+/// fee collector account and returns any remaining assets.
 fn handle_payment(
 	asset_location: Location,
 	payment: AssetsInHolding,
 	fee_amount: u128,
 ) -> Result<AssetsInHolding, XcmError> {
 	let fixed_fee: u128 = match asset_location.clone() {
+		// XON: local chain (12 decimals -> 0.01 XON = 10_000_000_000)
+		Location {
+			parents: 0,
+			interior: Junctions::Here,
+		} => 10_000_000_000,
+
 		// DOT: relay chain (10 decimals -> 0.01 DOT = 100_000_000)
 		Location {
 			parents: 1,

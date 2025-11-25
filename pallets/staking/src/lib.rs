@@ -220,6 +220,7 @@ pub mod pallet {
 		ProposedCandidateCommissionSet { _proposed_candidate: T::AccountId, },
 		ProposedCandidateOffline { _proposed_candidate: T::AccountId, },
 		ProposedCandidateOnline { _proposed_candidate: T::AccountId, },
+		ProposedCandidateBondCorrected { _proposed_candidate: T::AccountId, },
 
 		WaitingCandidateAdded { _waiting_candidate: T::AccountId, },
 		WaitingCandidateRemoved { _waiting_candidate: T::AccountId, },
@@ -562,6 +563,46 @@ pub mod pallet {
 			});
 
 			Self::deposit_event(Event::ProposedCandidateLeft { _proposed_candidate: who });
+			Ok(().into())
+		}
+
+		/// Bond Correction
+		/// Note:
+		/// 	Bond correction can be called when the candidate is still proposing
+		/// 	and it has a pending unreserved balance due to automated removal for
+		/// 	not authoring.  
+		/// 
+		/// 	Make sure that the proposed candidate is offline.  If the candidate
+		/// 	has just registered call first the offline_candidate extrinsic before
+		/// 	calling bond_correction.
+		/// 
+		/// 	It is very important to note that this extrinsic will zero out the bond
+		/// 	value of the proposed candidate.
+		/// Todo: 
+		/// 	Percentage for the treasury as a slashed fee because to authoring failure
+		#[pallet::call_index(8)]
+		#[pallet::weight(<weights::SubstrateWeight<T> as WeightInfo>::bond_correction())]
+		pub fn bond_correction(origin: OriginFor<T>, frozen_balance: BalanceOf<T>,) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+
+			let _ = ProposedCandidates::<T>::mutate(|candidates| {
+				if let Some(candidate) = candidates.iter_mut().find(|c| c.who == who) {
+					ensure!(candidate.offline, Error::<T>::ProposedCandidateStillOnline);
+					ensure!(!WaitingCandidates::<T>::get().contains(&candidate.who), Error::<T>::ProposedCandidateStillWaiting);
+					ensure!(!pallet_collator_selection::Invulnerables::<T>::get().contains(&candidate.who), Error::<T>::ProposedCandidateStillQueuing);
+					ensure!(!Self::still_authoring(candidate.who.clone()), Error::<T>::ProposedCandidateStillAuthoring);
+
+					// Unreserved the entire frozen bond
+					let _ = T::StakingCurrency::unreserve(&who, frozen_balance);
+
+					// Set the bond to zero
+					candidate.bond = Zero::zero();
+					candidate.last_updated = frame_system::Pallet::<T>::block_number();
+				}
+				Ok::<(), Error<T>>(())
+			});
+
+			Self::deposit_event(Event::ProposedCandidateBondCorrected { _proposed_candidate: who });
 			Ok(().into())
 		}
 

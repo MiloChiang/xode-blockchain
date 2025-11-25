@@ -29,9 +29,12 @@ mod benchmarks {
         bond: Zero::zero(),
         total_stake: Zero::zero(),
         last_updated: frame_system::Pallet::<T>::block_number(),
+        last_authored: frame_system::Pallet::<T>::block_number(),
         leaving: false,
         offline: false,
         commission: 0,
+        status: Status::Online,
+        status_level: 0,
       })
     }).expect("Failed to add initial candidate");
   }
@@ -43,7 +46,7 @@ mod benchmarks {
 	}
 
 	pub(super) fn create_balance<T: Config>() -> BalanceOf<T> {
-		return T::StakingCurrency::minimum_balance() * 10u32.into();
+		return T::StakingCurrency::minimum_balance() * 20_000_000u32.into();
 	}
 
   #[benchmark]
@@ -249,6 +252,30 @@ mod benchmarks {
 			.into(),
 		);
 	}
+
+  #[benchmark]
+  fn bond_correction() {
+    initial_config::<T>();
+
+    let caller: T::AccountId = whitelisted_caller();
+    set_free_balance::<T>(caller.clone());
+
+    assert_ok!(XodeStaking::<T>::register_candidate(
+      RawOrigin::Signed(caller.clone()).into()
+    ));
+
+    let new_bond: BalanceOf<T> = create_balance::<T>();
+
+    #[extrinsic_call]
+    _(RawOrigin::Signed(caller.clone()), new_bond);
+
+    assert_last_event::<T>(
+      Event::<T>::ProposedCandidateBondCorrected {
+        _proposed_candidate: caller.clone(),
+      }
+      .into(),
+    );
+  }  
 
   impl_benchmark_test_suite!(XodeStaking, crate::mock::new_test_ext(), crate::mock::Test);
 }

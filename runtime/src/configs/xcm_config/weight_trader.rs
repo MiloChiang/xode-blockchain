@@ -1,52 +1,77 @@
-use crate::{
-	AccountId, Balances, Runtime, WeightToFee
-};
+use crate::{configs::xcm_config::AssetTransactor};
 use frame_support::{
     parameter_types,
-    weights::{Weight, WeightToFee as WeightToFeeT}
+    weights::{Weight, WeightToFee as WeightToFeeT},
 };
-use polkadot_runtime_common::impls::ToAuthor;
 use xcm::latest::prelude::*;
-use xcm_builder::UsingComponents;
-use xcm_executor::{traits::WeightTrader, AssetsInHolding};
+use xcm_executor::{
+	AssetsInHolding,
+	traits::{TransactAsset, WeightTrader}
+};
 use alloc::sync::Arc;
+use sp_core::crypto::{Ss58Codec, AccountId32};
+use core::marker::PhantomData;
 
 parameter_types! {
 	pub const RelayLocation: Location = Location::parent();
 }
 
-/// A weight to fee implementation for USDT, which is used to convert weight into a fee
-/// that can be paid in USDT. This implementation is specifically designed to handle
-/// the conversion of weight into a fee amount that can be used for weight purchasing
-/// in the context of XCM transactions.
+/// Trait defining parameters for weight-to-fee conversion for different assets.
 /// 
-/// The fee is calculated based on the weight's reference time, divided by a scaling factor
-/// to convert it into a fee amount in USDT.
-/// 
-/// The scaling factor is set to 1,000,000 to ensure that the fee is reasonable and
-/// can be handled by the USDT asset.
-/// 
-/// This implementation is useful for scenarios where USDT is used as the asset for weight purchasing,
-/// allowing for dynamic handling of weight purchasing based on the available assets in the `AssetsInHolding`.
-pub struct UsdtWeightToFee;
+/// Implementers of this trait specify the fee rate per second for a given asset,
+/// allowing the `WeightToFeeConverter` to calculate the appropriate fee based on
+/// the weight of the XCM execution.
+pub trait WeightToFeeAssetParams {
+	const FEE_PER_SECOND: u128;
+}
 
-impl WeightToFeeT for UsdtWeightToFee {
+/// Weight-to-fee parameters for XON (native token) with a rate of 0.01 XON per second.
+pub struct XonWeightToFeeRate;
+impl WeightToFeeAssetParams for XonWeightToFeeRate {
+	const FEE_PER_SECOND: u128 = 10_000_000_000; 
+}
+
+/// Weight-to-fee parameters for DOT (relay chain token) with a rate of 0.01 DOT per second.
+pub struct DotWeightToFeeRate;
+impl WeightToFeeAssetParams for DotWeightToFeeRate {
+	const FEE_PER_SECOND: u128 = 100_000_000; // 0.01 DOT
+}
+
+/// Weight-to-fee parameters for USDT (AssetHub token) with a rate of 0.01 USDT per second.
+pub struct UsdtWeightToFeeRate;
+impl WeightToFeeAssetParams for UsdtWeightToFeeRate {
+	const FEE_PER_SECOND: u128 = 10_000; // 0.01 USDT
+}
+
+/// A generic weight-to-fee converter that calculates the fee based on the weight
+/// of the XCM execution and the fee rate defined by the implementer of
+/// `WeightToFeeAssetParams`.
+///
+/// This struct uses the `WeightToFeeAssetParams` trait to determine the fee rate
+/// for the specific asset, allowing for flexible fee calculations based on the
+/// asset being used for payment.
+pub struct WeightToFeeConverter<T: WeightToFeeAssetParams>(PhantomData<T>);
+
+impl<T: WeightToFeeAssetParams> WeightToFeeT for WeightToFeeConverter<T> {
 	type Balance = u128;
 
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		weight.ref_time().saturating_div(1_000_000).max(1).into()
+		let picos_per_second: u64 = 1_000_000_000_000u64;
+		let ref_time_picoseconds = weight.ref_time();
+		let fee = ref_time_picoseconds.saturating_mul(T::FEE_PER_SECOND as u64);
+
+		(fee.saturating_div(picos_per_second)) as u128
 	}
 }
 
-/// A dynamic weight trader that can handle multiple asset types for weight purchasing.
-/// This trader can be used to buy weight using different assets based on the context
-/// and available assets.
+/// Dynamic weight trader that calculates fees based on the asset used for payment.
 /// 
-/// This is useful for scenarios where the asset used for weight purchase may vary
-/// based on the XCM message or the context of the transaction.
+/// It supports XON (native token), DOT (relay chain token), and USDT (AssetHub token).
+/// The fee is calculated based on the weight of the XCM execution and a fixed fee
+/// of 0.01 units of the respective asset.
 /// 
-/// This implementation allows for dynamic handling of weight purchasing
-/// based on the assets available in the `AssetsInHolding` and the context of the XCM message.
+/// This implementation deducts the required fee from the provided assets and deposits
+/// it to a predefined fee collector account.
 pub struct DynamicWeightTrader;
 
 impl WeightTrader for DynamicWeightTrader {
@@ -60,70 +85,38 @@ impl WeightTrader for DynamicWeightTrader {
 		payment: AssetsInHolding,
 		context: &XcmContext,
 	) -> Result<AssetsInHolding, XcmError> {
-		// Determine the asset ID to use for weight purchasing.
-		let asset_id = payment.fungible.iter().find_map(|(id, _balance)| Some(id.clone()));
+		log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - weight: {:?}, payment: {:?}, context: {:?}",  weight, payment, context);
 
+		// Early return if payment is empty
+		let (asset_id, _) = payment.fungible.iter().next().ok_or(XcmError::TooExpensive)?;
+
+		// Check if asset matches USDT on AssetHub (parachain 1000)
 		match asset_id {
-			// Match Relay Chain native token (e.g., DOT) for weight purchase.
-			Some(AssetId(Location {
-				parents: 1, 
-				interior: Junctions::Here 
-			})) => {
-				log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - Relay Chain native asset junctions: {:?}", RelayLocation::get());
-				UsingComponents::<
-					WeightToFee, 
-					RelayLocation, 
-					AccountId, 
-					Balances, 
-					ToAuthor<Runtime>
-				>::new().buy_weight(weight, payment, context)
-			}
+			AssetId(xon_location @ Location {
+				parents: 0,
+				interior: Junctions::Here,
+			}) => handle_payment(xon_location.clone(), payment, WeightToFeeConverter::<XonWeightToFeeRate>::weight_to_fee(&weight)),
 
-			// Match AssetHub asset junctions (Parachain 1000, PalletInstance 50, GeneralIndex) → treat as USDT
-			Some(AssetId(Location {
+			AssetId(dot_location @ Location {
+				parents: 1,
+				interior: Junctions::Here,
+			}) => handle_payment(dot_location.clone(), payment, WeightToFeeConverter::<DotWeightToFeeRate>::weight_to_fee(&weight)),
+
+			AssetId(usdt_location @ Location {
 				parents: 1,
 				interior: Junctions::X3(junctions),
-			})) => {
-				match junctions.as_ref() {
-					// Match AssetHub asset with ParaId 1000 and PalletInstance 50
-					[Junction::Parachain(1000), Junction::PalletInstance(50), Junction::GeneralIndex(_)] => {
-						log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - AssetHub asset junctions: {:?}", junctions);
-
-						let usdt = 1984u32;
-						let fee_amount = UsdtWeightToFee::weight_to_fee(&weight);
-
-    					log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - Using USDT for weight purchase: {:?}", fee_amount);
-    
-						let required_asset_payment: Asset = (
-							AssetId(Location {
-								parents: 1,
-								interior: Junctions::X3(Arc::from([
-									Junction::Parachain(1000),
-									Junction::PalletInstance(50),
-									Junction::GeneralIndex(usdt as u128),
-								])),
-							}),
-							fee_amount,
-						).into();
-						let unused = payment.checked_sub(required_asset_payment).map_err(|_| XcmError::TooExpensive)?;
-
-						log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - Successfully purchased weight with USDT: {:?}", fee_amount);
-
-						Ok(unused)
-					},
-
-					// If junctions do not match expected AssetHub format
-					_ => {
-						log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - AssetHub asset junctions mismatch: {:?}", junctions);
-						Err(XcmError::InvalidLocation)
-					},
-				}
-			}
+			}) if matches!(
+				junctions.as_ref(),
+				[
+					Junction::Parachain(1000),
+					Junction::PalletInstance(50),
+					Junction::GeneralIndex(1984)
+				]
+			) => handle_payment(usdt_location.clone(), payment, WeightToFeeConverter::<UsdtWeightToFeeRate>::weight_to_fee(&weight)),
 			
-			// No match: asset not supported
 			_ => {
-				log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - No matching asset for weight purchase: {:?}", asset_id);
-				Err(XcmError::TooExpensive)
+				log::trace!(target: "xcm::weight_trader", "DynamicWeightTrader::buy_weight - Unsupported asset: {:?}", asset_id);
+				Err(XcmError::AssetNotFound)
 			}
 		}
 	}
@@ -131,4 +124,96 @@ impl WeightTrader for DynamicWeightTrader {
 	fn refund_weight(&mut self, _weight: Weight, _context: &XcmContext) -> Option<Asset> {
 		None
 	}
+}
+
+/// Handles the payment for weight purchase by deducting the required fee
+/// from the provided assets and depositing it to the fee collector.
+/// 
+/// The function calculates the total fee based on the provided `fee_amount`
+/// and a fixed fee of 0.01 units of the asset. It then deducts this total fee
+/// from the `payment` assets. If successful, it deposits the fee to a predefined
+/// fee collector account and returns any remaining assets.
+fn handle_payment(
+	asset_location: Location,
+	payment: AssetsInHolding,
+	fee_amount: u128,
+) -> Result<AssetsInHolding, XcmError> {
+	let fixed_fee: u128 = match asset_location.clone() {
+		// XON: local chain (12 decimals -> 0.01 XON = 10_000_000_000)
+		Location {
+			parents: 0,
+			interior: Junctions::Here,
+		} => 10_000_000_000,
+
+		// DOT: relay chain (10 decimals -> 0.01 DOT = 100_000_000)
+		Location {
+			parents: 1,
+			interior: Junctions::Here,
+		} => 100_000_000,
+
+		// USDT: AssetHub (6 decimals -> 0.01 USDT = 10_000)
+		Location {
+			parents: 1,
+			interior: Junctions::X3(junctions),
+		} if matches!(
+			junctions.as_ref(),
+			[
+				Junction::Parachain(1000),
+				Junction::PalletInstance(50),
+				Junction::GeneralIndex(1984)
+			]
+		) => 10_000,
+
+		_ => {
+			log::error!(
+				target: "xcm::weight_trader", "handle_payment - Unsupported asset location: {:?}",
+				asset_location
+			);
+			return Err(XcmError::FailedToTransactAsset("Unsupported asset location"));
+		}
+	};
+
+	let total_fee = fee_amount.saturating_add(fixed_fee);
+
+	// Subtract total fee from payment
+	let required_asset: Asset = (AssetId(asset_location.clone()), total_fee).into();
+	let unused_assets = payment.checked_sub(required_asset).map_err(|_| XcmError::TooExpensive)?;
+
+	// Remaining balance
+	let (_, remaining_balance) = unused_assets.fungible.iter().next().unwrap_or((&AssetId(asset_location.clone()), &0));
+
+	// Receiver (fee collector)
+	let receiver = AccountId32::from_ss58check("5Fqc6tG16FcR4QLwknqs5sb9Pc6pqsNwtwcPh7fNKCaP4DJT")
+		.map_err(|e| {
+			log::error!(target: "xcm::weight_trader", "Invalid receiver address: {:?}", e);
+			XcmError::FailedToTransactAsset("Invalid receiver address")
+		})?;
+
+	let receiver_location = Location {
+		parents: 0,
+		interior: Junctions::X1(Arc::from([Junction::AccountId32 {
+			network: None,
+			id: receiver.into(),
+		}])),
+	};
+
+	// Deposit total fee
+	let fee_asset: Asset = (AssetId(asset_location.clone()), total_fee).into();
+	AssetTransactor::deposit_asset(&fee_asset, &receiver_location, None).map_err(|e| {
+		log::error!(target: "xcm::weight_trader", "Fee deposit failed for {:?}: {:?}", asset_location, e);
+		XcmError::FailedToTransactAsset("Fee deposit failed")
+	})?;
+
+	// Return remaining assets (if any)
+	let mut final_assets = AssetsInHolding::new();
+	if *remaining_balance > 0 {
+		final_assets.subsume((AssetId(asset_location.clone()), *remaining_balance).into());
+	}
+
+	log::trace!(
+		target: "xcm::weight_trader", "handle_payment - Processed {:?}: total_fee={:?} (+0.01), remaining={:?}",
+		asset_location, total_fee, remaining_balance
+	);
+
+	Ok(final_assets)
 }

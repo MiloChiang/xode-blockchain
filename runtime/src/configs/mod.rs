@@ -88,6 +88,7 @@ impl frame_support::traits::Contains<RuntimeCall> for FilterRuntimeCall {
                 | RuntimeCall::Assets(AssetsCall::transfer_approved { .. })
                 | RuntimeCall::Assets(AssetsCall::freeze { .. })
                 | RuntimeCall::Assets(AssetsCall::thaw { .. })
+				| RuntimeCall::Assets(AssetsCall::transfer { .. })
         )
     }
 }

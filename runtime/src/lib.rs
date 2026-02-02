@@ -62,7 +62,7 @@ use frame_support::{
 	genesis_builder_helper::{build_state, get_preset},
 	weights::{
 		constants::WEIGHT_REF_TIME_PER_SECOND, Weight, WeightToFeeCoefficient, WeightToFeeCoefficients,
-		WeightToFeePolynomial,
+		WeightToFeePolynomial, WeightToFee as WeightToFeeConversion,
 	},
 };
 
@@ -77,20 +77,18 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use configs::{
 	RuntimeBlockWeights,
 	xcm_config::{
-		RelayLocation, XcmConfig, XcmRouter, LocationToAccountId,
-		weight_trader::DynamicWeightTrader
+		XcmConfig, XcmRouter, LocationToAccountId,
+		weight_trader::{WeightToFeeConverter, XonWeightToFeeRate, DotWeightToFeeRate, UsdtWeightToFeeRate}
 	}
 };
 
 use xcm::{
 	latest::prelude::{
-		Asset, AssetId, Junctions, Junction, Location,
-		XcmContext, XcmHash, 
+		AssetId, Junctions, Junction, Location,
 	},
 	Version as XcmVersion, VersionedAssetId, VersionedAssets, VersionedLocation,
 	VersionedXcm,
 };
-use xcm_executor::{traits::WeightTrader, AssetsInHolding};
 use xcm_runtime_apis::{
 	dry_run::{
 		CallDryRunEffects as ApiCallDryRunEffects, 
@@ -695,7 +693,7 @@ impl_runtime_apis! {
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use cumulus_pallet_session_benchmarking::Pallet as SessionBench;
-			use super::*;
+			//use super::*;
 
 			let mut list = Vec::<BenchmarkList>::new();
 			list_benchmarks!(list, extra);
@@ -708,7 +706,7 @@ impl_runtime_apis! {
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::{BenchmarkError, Benchmarking, BenchmarkBatch};
-			use super::*;
+			//use super::*;
 
 			use frame_system_benchmarking::Pallet as SystemBench;
 			impl frame_system_benchmarking::Config for Runtime {
@@ -754,7 +752,20 @@ impl_runtime_apis! {
 	impl xcm_runtime_apis::fees::XcmPaymentApi<Block> for Runtime {
 		fn query_acceptable_payment_assets(xcm_version: xcm::Version) -> Result<Vec<VersionedAssetId>, XcmPaymentApiError> {
 			let mut acceptable_assets: Vec<AssetId> = Vec::new();
-			acceptable_assets.push(AssetId(RelayLocation::get()));
+
+			// XON: Xode native token
+			acceptable_assets.push(AssetId(Location {
+				parents: 0,
+				interior: Junctions::Here,
+			}));
+
+			// DOT: Relay chain native token
+			acceptable_assets.push(AssetId(Location {
+				parents: 1,
+				interior: Junctions::Here,
+			}));
+
+			// USDT: AssetHub parachain asset (1984)
 			acceptable_assets.push(AssetId(Location {
 				parents: 1,
 				interior: Junctions::X3(Arc::from([
@@ -773,37 +784,44 @@ impl_runtime_apis! {
 				.map_err(|_| XcmPaymentApiError::WeightNotComputable)
 		}
 
-		// This implementation is based on the approach taken in the latest version of pallet-xcm.
-		// Reference: https://docs.rs/pallet-xcm/22.0.1/src/pallet_xcm/lib.rs.html#3223
-		//
-		// The version of pallet-xcm currently used in this chain is outdated and does not yet
-		// provide this functionality. To bridge the gap, we implemented `query_weight_to_asset_fee`
-		// in our runtime by following the design from `xcm-runtime-apis` and aligning it with the
-		// approach used upstream.
-		//
-		// Once the chain upgrades to a newer release of pallet-xcm, this implementation can be
-		// revisited to determine whether it should be replaced with the upstream version.
 		fn query_weight_to_asset_fee(weight: Weight, asset: VersionedAssetId) -> Result<u128, XcmPaymentApiError> {
-			let asset: AssetId = asset.clone().try_into()
-        		.map_err(|_| XcmPaymentApiError::VersionedConversionFailed)?;
+			// Convert VersionedAssetId to AssetId
+			let asset: AssetId = asset.clone()
+                .try_into()
+                .map_err(|_| XcmPaymentApiError::VersionedConversionFailed)?;
 
-			let max_amount = u128::MAX / 2;
-			let max_payment: Asset = (asset.clone(), max_amount).into();
-    		let payment = AssetsInHolding::from(max_payment);
-			let context = XcmContext::with_message_id(XcmHash::default());
+            // Add the fixed fee (0.01 DOT or USDT, depending on asset)
+            let total_fee: u128 = match asset {
+				// XON: local chain (12 decimals -> 0.01 XON = 10_000_000_000)
+                AssetId(Location {
+                    parents: 0,
+                    interior: Junctions::Here,
+                }) => WeightToFeeConverter::<XonWeightToFeeRate>::weight_to_fee(&weight).saturating_add(10_000_000_000u128),
 
-			let mut trader = DynamicWeightTrader::new();
-			let unspent_assets = trader
-				.buy_weight(weight, payment, &context)
-				.map_err(|_| XcmPaymentApiError::WeightNotComputable)?;
+				// DOT: Relay chain (10 decimals -> 0.01 DOT = 100_000_000)
+                AssetId(Location {
+                    parents: 1,
+                    interior: Junctions::Here,
+                }) => WeightToFeeConverter::<DotWeightToFeeRate>::weight_to_fee(&weight).saturating_add(100_000_000u128),
 
-			let Some(unspent) = unspent_assets.fungible.get(&asset) else {
-				return Err(XcmPaymentApiError::AssetNotFound);
-			};
+				// USDT: AssetHub parachain asset (1984) (6 decimals -> 0.01 USDT = 10_000)
+                AssetId(Location {
+                    parents: 1,
+                    interior: Junctions::X3(ref junctions),
+                }) if matches!(
+                    junctions.as_ref(),
+                    [
+                        Junction::Parachain(1000),
+                        Junction::PalletInstance(50),
+                        Junction::GeneralIndex(1984)
+                    ]
+                ) => WeightToFeeConverter::<UsdtWeightToFeeRate>::weight_to_fee(&weight).saturating_add(10_000u128),
 
-			let paid = max_amount - unspent;
+                _ => return Err(XcmPaymentApiError::AssetNotFound),
+            };
 
-			Ok(paid)
+            // Ensure the fee does not exceed the maximum payment
+            Ok(total_fee)
 		}
 
 		fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>) -> Result<VersionedAssets, XcmPaymentApiError> {

@@ -7646,7 +7646,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-xode-staking"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cumulus-primitives-core",
  "frame-benchmarking",

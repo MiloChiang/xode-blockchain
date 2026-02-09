@@ -458,6 +458,9 @@ impl pallet_assets::Config for Runtime {
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
+	// Stable 2512 Update
+	type ReserveData = ();
+	type Holder = ();
 }
 
 /// =========
@@ -596,6 +599,8 @@ impl pallet_treasury::Config for Runtime {
 	type PayoutPeriod = SpendPayoutPeriod;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
+	// Stable 2512 Update
+	type BlockNumberProvider = ();
 }
 
 /// ======================
@@ -624,6 +629,10 @@ impl pallet_collective::Config<TechnicalCommitteeInstance> for Runtime {
 	type SetMembersOrigin = EnsureAllTechnicalCommittee;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 	type MaxProposalWeight = TechnicalMaxProposalWeight;
+	// Stable 2512 Update
+	type DisapproveOrigin = EnsureAllTechnicalCommittee;
+	type KillOrigin = EnsureAllTechnicalCommittee;
+	type Consideration = ();
 }
 
 parameter_types! {
@@ -669,6 +678,10 @@ impl pallet_collective::Config<TreasuryCouncilInstance> for Runtime {
 	type SetMembersOrigin = EnsureAllTreasuryCouncil;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 	type MaxProposalWeight = TreasuryMaxProposalWeight;
+	// Stable 2512 Update
+	type DisapproveOrigin = EnsureAllTechnicalCommittee;
+	type KillOrigin = EnsureAllTechnicalCommittee;
+	type Consideration = ();
 }
 
 parameter_types! {

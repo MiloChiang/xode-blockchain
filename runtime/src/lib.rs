@@ -429,6 +429,13 @@ type EventRecord = frame_system::EventRecord<
     <Runtime as frame_system::Config>::Hash,
 >;
 
+// Stable 2512 Update
+type LazyBlockOf<T> =
+    sp_runtime::generic::LazyBlock<
+        <T as sp_runtime::traits::Block>::Header,
+        <T as sp_runtime::traits::Block>::Extrinsic,
+    >;
+
 // we move some impls outside so we can easily use them with `docify`.
 impl Runtime {
 	#[docify::export]
@@ -470,7 +477,7 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn execute_block(block: Block) {
+		fn execute_block(block: LazyBlockOf<Block>) {
 			Executive::execute_block(block)
 		}
 
@@ -507,7 +514,7 @@ impl_runtime_apis! {
 		}
 
 		fn check_inherents(
-			block: Block,
+			block: LazyBlockOf<Block>,
 			data: sp_inherents::InherentData,
 		) -> sp_inherents::CheckInherentsResult {
 			data.check_extrinsics(&block)

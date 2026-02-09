@@ -60,6 +60,7 @@ sp-consensus-aura = { version = "0.46.0", default-features = false }
 sp-core = { version = "39.0.0", default-features = false }
 sp-genesis-builder = { version = "0.21.0", default-features = false }
 sp-io = { version = "44.0.0", default-features = false }
+sp-keyring = { version = "45.0.0", default-features = false }
 sp-keystore = { version = "0.45.0", default-features = false }
 sp-runtime = { version = "45.0.0", default-features = false }
 sp-timestamp = { version = "40.0.0", default-features = false }

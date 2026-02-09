@@ -188,6 +188,8 @@ impl pallet_balances::Config for Runtime {
 	type RuntimeFreezeReason = RuntimeFreezeReason;
 	type FreezeIdentifier = RuntimeFreezeReason;
 	type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
+	// Stable 2512 Update
+	type DoneSlashHandler = ();
 }
 
 pub struct ToAuthor<R>(core::marker::PhantomData<R>);
@@ -284,6 +286,8 @@ impl pallet_transaction_payment::Config for Runtime {
 	type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
 	type FeeMultiplierUpdate = SlowAdjustingFeeUpdate<Self>;
 	type OperationalFeeMultiplier = ConstU8<5>;
+	// Stable 2512 Update
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -304,6 +308,8 @@ impl cumulus_pallet_parachain_system::Config for Runtime {
 	type ReservedXcmpWeight = ReservedXcmpWeight;
 	type CheckAssociatedRelayNumber = RelayNumberMonotonicallyIncreases;
 	type ConsensusHook = ConsensusHook;
+	// Stable 2512 Update
+	type RelayParentOffset = ConstU32<0>;
 }
 
 impl parachain_info::Config for Runtime {}
@@ -370,6 +376,10 @@ impl pallet_session::Config for Runtime {
 	type SessionHandler = <SessionKeys as sp_runtime::traits::OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type WeightInfo = ();
+	// Stable 2512 Update
+	type DisablingStrategy = ();
+	type Currency = Balances;
+	type KeyDeposit = ();
 }
 
 #[docify::export(aura_config)]

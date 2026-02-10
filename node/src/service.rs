@@ -15,7 +15,6 @@ use cumulus_client_collator::service::CollatorService;
 #[docify::export(lookahead_collator)]
 use cumulus_client_consensus_aura::collators::lookahead::{self as aura, Params as AuraParams};
 use cumulus_client_consensus_common::ParachainBlockImport as TParachainBlockImport;
-use cumulus_client_consensus_proposer::Proposer;
 use cumulus_client_service::{
 	build_network, build_relay_chain_interface, prepare_node_config, start_relay_chain_tasks,
 	BuildNetworkParams, CollatorSybilResistance, DARecoveryProfile, ParachainHostFunctions,
@@ -55,7 +54,7 @@ pub type Service = PartialComponents<
 	ParachainBackend,
 	(),
 	sc_consensus::DefaultImportQueue<Block>,
-	sc_transaction_pool::FullPool<Block, ParachainClient>,
+	sc_transaction_pool::TransactionPoolHandle<Block, ParachainClient>,
 	(ParachainBlockImport, Option<Telemetry>, Option<TelemetryWorkerHandle>),
 >;
 
@@ -171,7 +170,7 @@ fn start_consensus(
 	telemetry: Option<TelemetryHandle>,
 	task_manager: &TaskManager,
 	relay_chain_interface: Arc<dyn RelayChainInterface>,
-	transaction_pool: Arc<sc_transaction_pool::FullPool<Block, ParachainClient>>,
+	transaction_pool: Arc<sc_transaction_pool::TransactionPoolHandle<Block, ParachainClient>>,
 	keystore: KeystorePtr,
 	relay_chain_slot_duration: Duration,
 	para_id: ParaId,
@@ -179,15 +178,13 @@ fn start_consensus(
 	overseer_handle: OverseerHandle,
 	announce_block: Arc<dyn Fn(Hash, Option<Vec<u8>>) + Send + Sync>,
 ) -> Result<(), sc_service::Error> {
-	let proposer_factory = sc_basic_authorship::ProposerFactory::with_proof_recording(
+	let proposer = sc_basic_authorship::ProposerFactory::with_proof_recording(
 		task_manager.spawn_handle(),
 		client.clone(),
 		transaction_pool,
 		prometheus_registry,
 		telemetry.clone(),
 	);
-
-	let proposer = Proposer::new(proposer_factory);
 
 	let collator_service = CollatorService::new(
 		client.clone(),
@@ -248,16 +245,17 @@ pub async fn start_parachain_node(
 	let backend = params.backend.clone();
 	let mut task_manager = params.task_manager;
 
-	let (relay_chain_interface, collator_key) = build_relay_chain_interface(
-		polkadot_config,
-		&parachain_config,
-		telemetry_worker_handle,
-		&mut task_manager,
-		collator_options.clone(),
-		hwbench.clone(),
+	let (relay_chain_interface, collator_key, relay_chain_network, paranode_rx) =
+		build_relay_chain_interface(
+			polkadot_config,
+			&parachain_config,
+			telemetry_worker_handle,
+			&mut task_manager,
+			collator_options.clone(),
+			hwbench.clone(),
 	)
 	.await
-	.map_err(|e| sc_service::Error::Application(Box::new(e) as Box<_>))?;
+	.map_err(|e| sc_service::Error::Application(Box::new(e) as Box<_>))?;	
 
 	let validator = parachain_config.role.is_authority();
 	let transaction_pool = params.transaction_pool.clone();

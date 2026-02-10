@@ -88,7 +88,6 @@ use xcm::{
 	},
 	Version as XcmVersion, VersionedAssetId, VersionedAssets, VersionedLocation,
 	VersionedXcm,
-	WeightLimit,
 };
 use xcm_runtime_apis::{
 	dry_run::{
@@ -832,9 +831,9 @@ impl_runtime_apis! {
             Ok(total_fee)
 		}
 
-		fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>, weight_limit: WeightLimit) -> Result<VersionedAssets, XcmPaymentApiError> {
-			pallet_xcm::Pallet::<Runtime>::query_delivery_fees(destination, message)
-				.map_err(|_| XcmPaymentApiError::Unimplemented)
+		fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>, asset_id: VersionedAssetId) -> Result<VersionedAssets, XcmPaymentApiError> {
+			type AssetExchanger = <XcmConfig as xcm_executor::Config>::AssetExchanger;
+			pallet_xcm::Pallet::<Runtime>::query_delivery_fees::<AssetExchanger>(destination, message, asset_id)			
 		}
 	}
 
@@ -844,9 +843,9 @@ impl_runtime_apis! {
 				.map_err(|_| XcmDryRunApiError::Unimplemented)
 				.map(|effects| effects.into()) 
 		}
-
+		
 		fn dry_run_xcm(origin_location: VersionedLocation, xcm: VersionedXcm<RuntimeCall>) -> Result<ApiXcmDryRunEffects<<Runtime as frame_system::Config>::RuntimeEvent>, XcmDryRunApiError> {
-			pallet_xcm::Pallet::<Runtime>::dry_run_xcm::<Runtime, XcmRouter, RuntimeCall, XcmConfig>(origin_location, xcm)
+			pallet_xcm::Pallet::<Runtime>::dry_run_xcm::<XcmRouter>(origin_location, xcm)
 				.map_err(|_| XcmDryRunApiError::Unimplemented)
 				.map(|effects| effects.into()) 
 		}

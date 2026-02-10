@@ -88,6 +88,7 @@ use xcm::{
 	},
 	Version as XcmVersion, VersionedAssetId, VersionedAssets, VersionedLocation,
 	VersionedXcm,
+	WeightLimit,
 };
 use xcm_runtime_apis::{
 	dry_run::{
@@ -238,7 +239,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
-	state_version: 1,
+	system_version: 1,
 };
 
 #[docify::export]
@@ -831,7 +832,7 @@ impl_runtime_apis! {
             Ok(total_fee)
 		}
 
-		fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>) -> Result<VersionedAssets, XcmPaymentApiError> {
+		fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>, weight_limit: WeightLimit) -> Result<VersionedAssets, XcmPaymentApiError> {
 			pallet_xcm::Pallet::<Runtime>::query_delivery_fees(destination, message)
 				.map_err(|_| XcmPaymentApiError::Unimplemented)
 		}

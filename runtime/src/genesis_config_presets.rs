@@ -54,6 +54,7 @@ fn testnet_genesis(
 				.cloned()
 				.map(|k| (k, 1u128 << 60))
 				.collect::<Vec<_>>(),
+			dev_accounts: None,
 		},
 		parachain_info: ParachainInfoConfig { parachain_id: id, ..Default::default() },
 		collator_selection: CollatorSelectionConfig {
@@ -97,31 +98,31 @@ fn local_testnet_genesis() -> Value {
 		// initial collators.
 		vec![
 			(
-				sp_keyring::Sr25519Keyring::Alice.public().into(),
-				sp_keyring::Ed25519Keyring::Alice.public().into(),
+				Sr25519Keyring::Alice.to_account_id(),
+				Sr25519Keyring::Alice.public().into(),
 			),
 			(
-				sp_keyring::Sr25519Keyring::Bob.public().into(),
-				sp_keyring::Ed25519Keyring::Bob.public().into(),
+				Sr25519Keyring::Bob.to_account_id(),
+				Sr25519Keyring::Bob.public().into(),
 			),
 		],
 		vec![
-			sp_keyring::Sr25519Keyring::Alice.public().into(),
-			sp_keyring::Sr25519Keyring::Bob.public().into(),
-			sp_keyring::Sr25519Keyring::Charlie.public().into(),
-			sp_keyring::Sr25519Keyring::Dave.public().into(),
-			sp_keyring::Sr25519Keyring::Eve.public().into(),
-			sp_keyring::Sr25519Keyring::Ferdie.public().into(),
+			Sr25519Keyring::Alice.to_account_id(),
+			Sr25519Keyring::Bob.to_account_id(),
+			Sr25519Keyring::Charlie.to_account_id(),
+			Sr25519Keyring::Dave.to_account_id(),
+			Sr25519Keyring::Eve.to_account_id(),
+			Sr25519Keyring::Ferdie.to_account_id(),
 		],
 		vec![
-			sp_keyring::Sr25519Keyring::Alice.public().into(),
-			sp_keyring::Sr25519Keyring::Bob.public().into(),
-			sp_keyring::Sr25519Keyring::Charlie.public().into(),
+			Sr25519Keyring::Alice.to_account_id(),
+			Sr25519Keyring::Bob.to_account_id(),
+			Sr25519Keyring::Charlie.to_account_id(),
 		],
 		vec![
-			sp_keyring::Sr25519Keyring::Dave.public().into(),
-			sp_keyring::Sr25519Keyring::Eve.public().into(),
-			sp_keyring::Sr25519Keyring::Ferdie.public().into(),
+			Sr25519Keyring::Dave.to_account_id(),
+			Sr25519Keyring::Eve.to_account_id(),
+			Sr25519Keyring::Ferdie.to_account_id(),
 		],
 		4607.into(),
 	)
@@ -132,31 +133,31 @@ fn development_config_genesis() -> Value {
 		// initial collators.
 		vec![
 			(
-				sp_keyring::Sr25519Keyring::Alice.public().into(),
-				sp_keyring::Ed25519Keyring::Alice.public().into(),
+				Sr25519Keyring::Alice.to_account_id(),
+				Sr25519Keyring::Alice.public().into(),
 			),
 			(
-				sp_keyring::Sr25519Keyring::Bob.public().into(),
-				sp_keyring::Ed25519Keyring::Bob.public().into(),
+				Sr25519Keyring::Bob.to_account_id(),
+				Sr25519Keyring::Bob.public().into(),
 			),
 		],
 		vec![
-			sp_keyring::Sr25519Keyring::Alice.public().into(),
-			sp_keyring::Sr25519Keyring::Bob.public().into(),
-			sp_keyring::Sr25519Keyring::Charlie.public().into(),
-			sp_keyring::Sr25519Keyring::Dave.public().into(),
-			sp_keyring::Sr25519Keyring::Eve.public().into(),
-			sp_keyring::Sr25519Keyring::Ferdie.public().into(),
+			Sr25519Keyring::Alice.to_account_id(),
+			Sr25519Keyring::Bob.to_account_id(),
+			Sr25519Keyring::Charlie.to_account_id(),
+			Sr25519Keyring::Dave.to_account_id(),
+			Sr25519Keyring::Eve.to_account_id(),
+			Sr25519Keyring::Ferdie.to_account_id(),
 		],
 		vec![
-			sp_keyring::Sr25519Keyring::Alice.public().into(),
-			sp_keyring::Sr25519Keyring::Bob.public().into(),
-			sp_keyring::Sr25519Keyring::Charlie.public().into(),
+			Sr25519Keyring::Alice.to_account_id(),
+			Sr25519Keyring::Bob.to_account_id(),
+			Sr25519Keyring::Charlie.to_account_id(),
 		],
 		vec![
-			sp_keyring::Sr25519Keyring::Dave.public().into(),
-			sp_keyring::Sr25519Keyring::Eve.public().into(),
-			sp_keyring::Sr25519Keyring::Ferdie.public().into(),
+			Sr25519Keyring::Dave.to_account_id(),
+			Sr25519Keyring::Eve.to_account_id(),
+			Sr25519Keyring::Ferdie.to_account_id(),
 		],
 		4607.into(),
 	)
@@ -164,9 +165,9 @@ fn development_config_genesis() -> Value {
 
 /// Provides the JSON representation of predefined genesis config for given `id`.
 pub fn get_preset(id: &PresetId) -> Option<vec::Vec<u8>> {
-	let patch = match id.try_into() {
-		Ok(sp_genesis_builder::LOCAL_TESTNET_RUNTIME_PRESET) => local_testnet_genesis(),
-		Ok(sp_genesis_builder::DEV_RUNTIME_PRESET) => development_config_genesis(),
+	let patch = match id.as_ref() {
+		sp_genesis_builder::LOCAL_TESTNET_RUNTIME_PRESET => local_testnet_genesis(),
+		sp_genesis_builder::DEV_RUNTIME_PRESET => development_config_genesis(),
 		_ => return None,
 	};
 	Some(

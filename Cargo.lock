@@ -7792,6 +7792,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-assets-precompiles"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66e0d360a50b3b946c9fdd738ac2206954cfccfa763ed907968bde68ba295d31"
+dependencies = [
+ "ethereum-standards",
+ "frame-support",
+ "pallet-assets",
+ "pallet-revive",
+]
+
+[[package]]
 name = "pallet-aura"
 version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18182,6 +18194,7 @@ dependencies = [
  "log",
  "pallet-asset-rate",
  "pallet-assets",
+ "pallet-assets-precompiles",
  "pallet-aura",
  "pallet-authorship",
  "pallet-balances",

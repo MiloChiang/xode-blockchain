@@ -20,6 +20,9 @@ use sp_keyring::Sr25519Keyring;
 /// The default XCM version to set in genesis config.
 const SAFE_XCM_VERSION: u32 = xcm::prelude::XCM_VERSION;
 
+#[docify::export_content]
+pub const PARACHAIN_ID: u32 = 4607;
+
 /// Generate the session keys from individual elements.
 ///
 /// The input must be a tuple of individual keys (a single arg for now since we have just one key).
@@ -124,7 +127,7 @@ fn local_testnet_genesis() -> Value {
 			Sr25519Keyring::Eve.to_account_id(),
 			Sr25519Keyring::Ferdie.to_account_id(),
 		],
-		4607.into(),
+		PARACHAIN_ID.into(),
 	)
 }
 
@@ -159,7 +162,7 @@ fn development_config_genesis() -> Value {
 			Sr25519Keyring::Eve.to_account_id(),
 			Sr25519Keyring::Ferdie.to_account_id(),
 		],
-		4607.into(),
+		PARACHAIN_ID.into(),
 	)
 }
 

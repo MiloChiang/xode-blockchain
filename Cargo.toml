@@ -128,4 +128,5 @@ pallet-whitelist = { version = "44.0.0", default-features = false }
 pallet-root-testing = { version = "21.0.0", default-features = false }
 pallet-utility = { version = "45.0.0", default-features = false }
 # Revive
+pallet-assets-precompiles = { version = "0.4.1", default-features = false }
 pallet-revive = { version = "0.12.2", default-features = false }

@@ -58,10 +58,12 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_runtime:: {
 	Perbill, Percent,
 	traits::{ AccountIdConversion, Zero },
+	FixedU128,
 };
 use sp_version::RuntimeVersion;
 use xcm::latest::prelude::BodyId;
 use pallet_collective::{EnsureProportionAtLeast, EnsureProportionMoreThan};
+use pallet_assets_precompiles::{InlineIdConfig, ERC20};
 
 
 // Local module imports
@@ -783,4 +785,61 @@ impl pallet_utility::Config for Runtime {
 	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
 
+/// ======
+/// Revive
+/// ======
+const ETH: u128 = 1_000_000_000_000_000_000;
 
+parameter_types! {
+	pub ChainId: u64 = u32::from(crate::genesis_config_presets::PARACHAIN_ID) as u64;
+	pub const NativeToEthRatio: u32 = (ETH/UNIT) as u32;
+	pub const DepositPerChildTrieItem: Balance = deposit(1, 0) / 100;
+	pub const MaxEthExtrinsicWeight: FixedU128 = FixedU128::from_rational(9, 10);
+}
+
+impl pallet_revive::Config for Runtime {
+	type AddressMapper = pallet_revive::AccountId32Mapper<Self>;
+	// No runtime dispatchables are callable from contracts.
+	type ChainId = ChainId;
+	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
+	type Currency = Balances;
+	type DepositPerByte = DepositPerByte;
+	type DepositPerItem = DepositPerItem;
+	type InstantiateOrigin = EnsureSigned<Self::AccountId>;
+	// 1 ETH : 1_000_000 UNIT
+	type NativeToEthRatio = NativeToEthRatio;
+	// 512 MB. Used in an integrity test that verifies the runtime has enough memory.
+	type PVFMemory = ConstU32<{ 512 * 1024 * 1024 }>;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	// 128 MB. Used in an integrity that verifies the runtime has enough memory.
+	type RuntimeMemory = ConstU32<{ 128 * 1024 * 1024 }>;
+	type Time = Timestamp;
+	// Disables access to unsafe host fns such as xcm_send.
+	type UnsafeUnstableInterface = ConstBool<false>;
+	type UploadOrigin = EnsureSigned<Self::AccountId>;
+	type WeightInfo = pallet_revive::weights::SubstrateWeight<Self>;
+    type FindAuthor = <Runtime as pallet_authorship::Config>::FindAuthor;
+	// Stable 2512 Revive updates
+	type Balance = Balance;
+	type RuntimeOrigin = RuntimeOrigin;
+	type GasScale = ConstU32<1000>;
+	type DebugEnabled = ConstBool<false>;
+	type DepositPerChildTrieItem = DepositPerChildTrieItem;
+	type AllowEVMBytecode = ConstBool<true>;
+	type MaxEthExtrinsicWeight = MaxEthExtrinsicWeight;
+	type FeeInfo = ();
+	type Precompiles = ();
+}
+
+impl TryFrom<RuntimeCall> for pallet_revive::Call<Runtime> {
+	type Error = ();
+
+	fn try_from(value: RuntimeCall) -> Result<Self, Self::Error> {
+		match value {
+			RuntimeCall::Revive(call) => Ok(call),
+			_ => Err(()),
+		}
+	}
+}

@@ -95,6 +95,7 @@ pallet-whitelist.workspace = true
 pallet-root-testing.workspace = true
 pallet-utility.workspace = true
 # Revive
+pallet-assets-precompiles.workspace = true
 pallet-revive.workspace = true
 
 [features]
@@ -164,6 +165,7 @@ std = [
 	"pallet-root-testing/std",
 	"pallet-utility/std",
 	"pallet-revive/std",
+	"pallet-assets-precompiles/std",
 ]
 
 runtime-benchmarks = [

@@ -404,7 +404,10 @@ mod runtime {
 	pub type Utility = pallet_utility;
 	#[runtime::pallet_index(81)]	
 	pub type RootTesting = pallet_root_testing;
-	
+
+	// Revive
+    #[runtime::pallet_index(90)]
+    pub type Revive = pallet_revive;
 }
 
 #[docify::export(register_validate_block)]

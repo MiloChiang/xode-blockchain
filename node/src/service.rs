@@ -336,7 +336,7 @@ pub async fn start_parachain_node(
 		tx_handler_controller,
 		telemetry: telemetry.as_mut(),
 		tracing_execute_block: Some(Arc::new(ParachainTracingExecuteBlock::new(client.clone()))),
-	})?;
+	})?;	
 
 	if let Some(hwbench) = hwbench {
 		sc_sysinfo::print_hwbench(&hwbench);

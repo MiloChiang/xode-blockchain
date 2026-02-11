@@ -29,7 +29,7 @@ docify = { version = "0.4.1" }
 frame-benchmarking = { version = "45.0.2", default-features = false }
 frame-benchmarking-cli = { version = "53.0.0", default-features = false }
 futures = { version = "0.3.30" }
-jsonrpsee = { version = "0.26.0" }
+jsonrpsee = { version = "0.24.0" }
 log = { version = "0.4.22", default-features = false }
 pallet-transaction-payment-rpc = { version = "48.0.0", default-features = false }
 polkadot-cli = { version = "31.0.0", default-features = false }

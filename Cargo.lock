@@ -2828,6 +2828,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cumulus-pallet-weight-reclaim"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0259d53fe511c79be65f50cdb31b22837ebf804331c643ae2a155d91d8efd466"
+dependencies = [
+ "cumulus-primitives-storage-weight-reclaim",
+ "derive-where",
+ "docify 0.2.9",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
+ "sp-trie",
+]
+
+[[package]]
 name = "cumulus-pallet-xcm"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18175,6 +18195,7 @@ dependencies = [
  "cumulus-pallet-aura-ext",
  "cumulus-pallet-parachain-system",
  "cumulus-pallet-session-benchmarking",
+ "cumulus-pallet-weight-reclaim",
  "cumulus-pallet-xcm",
  "cumulus-pallet-xcmp-queue",
  "cumulus-primitives-aura",

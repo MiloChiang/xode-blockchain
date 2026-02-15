@@ -72,10 +72,12 @@ use super::{
 	AccountId, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection, ConsensusHook, Hash,
 	MessageQueue, Nonce, PalletInfo, ParachainSystem, Runtime, RuntimeCall, RuntimeEvent,
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys, OriginCaller, 
-	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, EXISTENTIAL_DEPOSIT, DAYS, HOURS, MINUTES,
+	System, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, EXISTENTIAL_DEPOSIT, DAYS, HOURS, MINUTES,
 	MAXIMUM_BLOCK_WEIGHT, UNIT, MICRO_UNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION,
 	// Governance
 	TechnicalCommittee, TreasuryCouncil,
+	// Revive
+	Address, Signature, EthExtraImpl,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 
@@ -275,6 +277,19 @@ where
 		}
 	}
 }
+
+/// `pallet_revive` requires this specific `WeightToFee` implementation.
+///
+/// This is needed because we make certain assumptions about how weight
+/// is mapped to fees. Enforced at compile time.
+pub type WeightToFee = pallet_revive::evm::fees::BlockRatioFee<
+	// p (CENTS)
+	10_000_000_000,
+	// q
+	{ 100 * ExtrinsicBaseWeight::get().ref_time() as u128 },
+	Runtime,
+	Balance,
+>;
 
 parameter_types! {
 	/// Relay Chain `TransactionByteFee` / 10
@@ -788,6 +803,10 @@ impl pallet_utility::Config for Runtime {
 /// ======
 /// Revive
 /// ======
+impl cumulus_pallet_weight_reclaim::Config for Runtime {
+	type WeightInfo = ();
+}
+
 const ETH: u128 = 1_000_000_000_000_000_000;
 
 parameter_types! {
@@ -831,15 +850,4 @@ impl pallet_revive::Config for Runtime {
 	type MaxEthExtrinsicWeight = MaxEthExtrinsicWeight;
 	type FeeInfo = ();
 	type Precompiles = ();
-}
-
-impl TryFrom<RuntimeCall> for pallet_revive::Call<Runtime> {
-	type Error = ();
-
-	fn try_from(value: RuntimeCall) -> Result<Self, Self::Error> {
-		match value {
-			RuntimeCall::Revive(call) => Ok(call),
-			_ => Err(()),
-		}
-	}
 }

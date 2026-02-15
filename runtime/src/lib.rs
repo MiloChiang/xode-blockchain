@@ -98,6 +98,15 @@ use xcm_runtime_apis::{
 	fees::Error as XcmPaymentApiError,
 };
 
+/// Revive
+use pallet_revive::EthBlock;
+use pallet_revive::evm::runtime::EthExtra;
+use pallet_revive::AddressMapper;
+use pallet_revive::ReceiptGasInfo;
+use pallet_revive::ExecReturnValue;
+use sp_core::{H160, U256, H256};
+use codec::Encode;
+
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 
@@ -134,28 +143,62 @@ pub type BlockId = generic::BlockId<Block>;
 
 /// The SignedExtension to the basic transaction logic.
 #[docify::export(template_signed_extra)]
-pub type SignedExtra = (
-	frame_system::CheckNonZeroSender<Runtime>,
-	frame_system::CheckSpecVersion<Runtime>,
-	frame_system::CheckTxVersion<Runtime>,
-	frame_system::CheckGenesis<Runtime>,
-	frame_system::CheckEra<Runtime>,
-	frame_system::CheckNonce<Runtime>,
-	frame_system::CheckWeight<Runtime>,
-	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-	cumulus_primitives_storage_weight_reclaim::StorageWeightReclaim<Runtime>,
-	frame_metadata_hash_extension::CheckMetadataHash<Runtime>,
-);
+pub type TxExtension = cumulus_pallet_weight_reclaim::StorageWeightReclaim<
+    Runtime,
+    (
+        frame_system::CheckNonZeroSender<Runtime>,
+        frame_system::CheckSpecVersion<Runtime>,
+        frame_system::CheckTxVersion<Runtime>,
+        frame_system::CheckGenesis<Runtime>,
+        frame_system::CheckEra<Runtime>,
+        frame_system::CheckNonce<Runtime>,
+        frame_system::CheckWeight<Runtime>,
+        pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+        frame_metadata_hash_extension::CheckMetadataHash<Runtime>,
+		pallet_revive::evm::tx_extension::SetOrigin<Runtime>,
+    ),
+>;
 
 /// Pallet contracts
 const CONTRACTS_DEBUG_OUTPUT: pallet_contracts::DebugInfo =
     pallet_contracts::DebugInfo::UnsafeDebug;
 const CONTRACTS_EVENTS: pallet_contracts::CollectEvents =
     pallet_contracts::CollectEvents::UnsafeCollect;
-	
+
+/// EthExtra converts an unsigned Call::eth_transact into a CheckedExtrinsic.
+/// Default extensions applied to Ethereum transactions.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct EthExtraImpl;
+
+impl EthExtra for EthExtraImpl {
+	type Config = Runtime;
+	type Extension = TxExtension;
+
+	fn get_eth_extension(nonce: u32, tip: Balance) -> Self::Extension {
+		(
+            frame_system::CheckNonZeroSender::<Runtime>::new(),
+            frame_system::CheckSpecVersion::<Runtime>::new(),
+            frame_system::CheckTxVersion::<Runtime>::new(),
+            frame_system::CheckGenesis::<Runtime>::new(),
+            frame_system::CheckMortality::from(generic::Era::Immortal),
+            frame_system::CheckNonce::<Runtime>::from(nonce),
+            frame_system::CheckWeight::<Runtime>::new(),
+            pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+            frame_metadata_hash_extension::CheckMetadataHash::<Runtime>::new(false),
+			pallet_revive::evm::tx_extension::SetOrigin::<Runtime>::new_from_eth_transaction(),
+		)
+			.into()
+	}
+}
+
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
-	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+    sp_runtime::generic::UncheckedExtrinsic<
+        Address,
+        RuntimeCall,
+        Signature,
+        TxExtension,
+    >;
 
 /// All migrations of the runtime, aside from the ones declared in the pallets.
 ///
@@ -170,7 +213,6 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	Migrations,
 >;
 
 /// Handles converting a weight scalar to a fee value, based on the scale and granularity of the
@@ -671,6 +713,52 @@ impl_runtime_apis! {
             Contracts::get_storage(address, key)
         }
     }
+
+	impl pallet_revive::ReviveApi<Block, AccountId, Balance, Nonce, BlockNumber, BlockNumber> for Runtime
+    {
+		fn eth_block() -> EthBlock {
+			pallet_revive::Pallet::<Runtime>::eth_block()
+		}
+
+		fn eth_block_hash(number: U256) -> Option<H256> {
+			// Convert U256 → BlockNumber
+			let number: BlockNumber = number.low_u64() as BlockNumber;
+			Some(frame_system::Pallet::<Runtime>::block_hash(number))
+		}
+
+		fn eth_receipt_data() -> sp_runtime::Vec<ReceiptGasInfo> {
+			pallet_revive::Pallet::<Runtime>::eth_receipt_data()
+		}
+
+		fn block_gas_limit() -> U256 { 
+			pallet_revive::Pallet::<Runtime>::evm_block_gas_limit().into()
+		}
+
+		fn balance(address: H160) -> U256 {
+			// Convert Ethereum H160 → AccountId (assuming 20-byte padded AccountId32)
+			let mut acc = [0u8; 32];
+			acc[12..].copy_from_slice(&address.0); // last 20 bytes = H160
+			let account: AccountId = sp_runtime::AccountId32::from(acc);
+
+			// Query the balance from the Balances pallet
+			let free = pallet_balances::Pallet::<Runtime>::free_balance(&account);
+			U256::from(free)
+		}
+
+		fn gas_price() -> U256 { 
+			U256::from(10_000_000_000u64)
+		}
+
+		fn nonce(address: sp_core::H160) -> u32 {
+			// Convert H160 Ethereum address to AccountId (AccountId32)
+			let mut acc = [0u8; 32];
+			acc[12..].copy_from_slice(&address.0);
+			let account: AccountId = sp_runtime::AccountId32::from(acc);
+
+			// Get the current nonce from the pallet (frame_system::Pallet stores account nonce)
+			frame_system::Pallet::<Runtime>::account_nonce(&account)
+		}
+	}
 
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {

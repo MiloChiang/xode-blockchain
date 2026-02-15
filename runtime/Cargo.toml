@@ -95,6 +95,7 @@ pallet-whitelist.workspace = true
 pallet-root-testing.workspace = true
 pallet-utility.workspace = true
 # Revive
+cumulus-pallet-weight-reclaim.workspace = true
 pallet-assets-precompiles.workspace = true
 pallet-revive.workspace = true
 
@@ -166,6 +167,7 @@ std = [
 	"pallet-utility/std",
 	"pallet-revive/std",
 	"pallet-assets-precompiles/std",
+	"cumulus-pallet-weight-reclaim/std",
 ]
 
 runtime-benchmarks = [

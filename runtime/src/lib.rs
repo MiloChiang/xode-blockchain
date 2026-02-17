@@ -100,10 +100,18 @@ use xcm_runtime_apis::{
 
 /// Revive
 use pallet_revive::EthBlock;
-use pallet_revive::evm::runtime::EthExtra;
 use pallet_revive::AddressMapper;
 use pallet_revive::ReceiptGasInfo;
 use pallet_revive::ExecReturnValue;
+use pallet_revive::evm::GenericTransaction;
+use pallet_revive::evm::runtime::EthExtra;
+use pallet_revive::EthTransactInfo;
+use pallet_revive::EthTransactError;
+use pallet_revive::BlockWeights;
+use pallet_revive::DispatchInfo;
+
+use sp_std::vec;
+use sp_runtime::traits::TransactionExtension;
 use sp_core::{H160, U256, H256};
 use codec::Encode;
 
@@ -497,7 +505,12 @@ impl Runtime {
 	}
 }
 
-impl_runtime_apis! {
+pallet_revive::impl_runtime_apis_plus_revive_traits!(
+    Runtime,
+    Revive,
+    Executive,
+    EthExtraImpl,      
+
 	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
 		fn slot_duration() -> sp_consensus_aura::SlotDuration {
 			Runtime::impl_slot_duration()
@@ -714,52 +727,6 @@ impl_runtime_apis! {
         }
     }
 
-	impl pallet_revive::ReviveApi<Block, AccountId, Balance, Nonce, BlockNumber, BlockNumber> for Runtime
-    {
-		fn eth_block() -> EthBlock {
-			pallet_revive::Pallet::<Runtime>::eth_block()
-		}
-
-		fn eth_block_hash(number: U256) -> Option<H256> {
-			// Convert U256 → BlockNumber
-			let number: BlockNumber = number.low_u64() as BlockNumber;
-			Some(frame_system::Pallet::<Runtime>::block_hash(number))
-		}
-
-		fn eth_receipt_data() -> sp_runtime::Vec<ReceiptGasInfo> {
-			pallet_revive::Pallet::<Runtime>::eth_receipt_data()
-		}
-
-		fn block_gas_limit() -> U256 { 
-			pallet_revive::Pallet::<Runtime>::evm_block_gas_limit().into()
-		}
-
-		fn balance(address: H160) -> U256 {
-			// Convert Ethereum H160 → AccountId (assuming 20-byte padded AccountId32)
-			let mut acc = [0u8; 32];
-			acc[12..].copy_from_slice(&address.0); // last 20 bytes = H160
-			let account: AccountId = sp_runtime::AccountId32::from(acc);
-
-			// Query the balance from the Balances pallet
-			let free = pallet_balances::Pallet::<Runtime>::free_balance(&account);
-			U256::from(free)
-		}
-
-		fn gas_price() -> U256 { 
-			U256::from(10_000_000_000u64)
-		}
-
-		fn nonce(address: sp_core::H160) -> u32 {
-			// Convert H160 Ethereum address to AccountId (AccountId32)
-			let mut acc = [0u8; 32];
-			acc[12..].copy_from_slice(&address.0);
-			let account: AccountId = sp_runtime::AccountId32::from(acc);
-
-			// Get the current nonce from the pallet (frame_system::Pallet stores account nonce)
-			frame_system::Pallet::<Runtime>::account_nonce(&account)
-		}
-	}
-
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
 		fn on_runtime_upgrade(checks: frame_try_runtime::UpgradeCheckSelect) -> (Weight, Weight) {
@@ -952,5 +919,5 @@ impl_runtime_apis! {
 				LocationToAccountId,
 			>::convert_location(location)
 		}
-	}
-}
+	}	
+);

@@ -51,7 +51,7 @@ This guide walks you through setting up the Ethereum JSON-RPC adapter for pallet
 
 ### Installation Steps
 
-#### 1. Install the latest rust
+#### 1. Install the latest Rust
 
 ```bash
 # Update stable toolchain to the latest version
@@ -79,9 +79,7 @@ cd /path/to/xode-blockchain
 
 ```bash
 # Connect to custom node RPC port and listen on custom port
-pallet-revive-eth-rpc \
-  --substrate-url ws://127.0.0.1:9944 \
-  --port 8545
+eth-rpc --node-rpc-url ws://127.0.0.1:9944 --rpc-port 8545
 ```
 #### 5. Test Xode Ethereum RPC Endpoint
 

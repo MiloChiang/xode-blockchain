@@ -63,8 +63,6 @@ use sp_runtime:: {
 use sp_version::RuntimeVersion;
 use xcm::latest::prelude::BodyId;
 use pallet_collective::{EnsureProportionAtLeast, EnsureProportionMoreThan};
-use pallet_assets_precompiles::{InlineIdConfig, ERC20};
-
 
 // Local module imports
 use super::{
@@ -76,8 +74,6 @@ use super::{
 	MAXIMUM_BLOCK_WEIGHT, UNIT, MICRO_UNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION,
 	// Governance
 	TechnicalCommittee, TreasuryCouncil,
-	// Revive
-	Address, Signature, EthExtraImpl,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 
@@ -774,7 +770,6 @@ parameter_types! {
 }
 
 impl pallet_xode_staking::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_xode_staking::weights::SubstrateWeight<Runtime>;
 	type MaxProposedCandidates = MaxProposedCandidates;  
 	type MaxProposedCandidateDelegates = MaxProposedCandidateDelegates;  

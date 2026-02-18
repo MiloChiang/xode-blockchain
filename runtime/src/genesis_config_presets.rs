@@ -11,7 +11,6 @@ use alloc::{vec, vec::Vec};
 //use parachains_common::{genesis_config_helpers::*, AuraId};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use serde_json::Value;
-use sp_core::sr25519;
 //use sp_genesis_builder::PresetId;
 use sp_genesis_builder::{self, PresetId};
 use sp_runtime::{BoundedVec, AccountId32};

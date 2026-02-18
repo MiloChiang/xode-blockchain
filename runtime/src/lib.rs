@@ -46,7 +46,7 @@ use smallvec::smallvec;
 pub use sp_runtime::BuildStorage;
 
 use sp_runtime::{
-	create_runtime_str, generic, impl_opaque_keys,
+	generic, impl_opaque_keys,
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature, MultiAddress, Perbill,
 	traits::Block as BlockT,
@@ -99,21 +99,10 @@ use xcm_runtime_apis::{
 };
 
 /// Revive
-use pallet_revive::EthBlock;
-use pallet_revive::AddressMapper;
-use pallet_revive::ReceiptGasInfo;
-use pallet_revive::ExecReturnValue;
-use pallet_revive::evm::GenericTransaction;
 use pallet_revive::evm::runtime::EthExtra;
-use pallet_revive::EthTransactInfo;
-use pallet_revive::EthTransactError;
-use pallet_revive::BlockWeights;
-use pallet_revive::DispatchInfo;
-
 use sp_std::vec;
-use sp_runtime::traits::TransactionExtension;
-use sp_core::{H160, U256, H256};
-use codec::Encode;
+
+use sp_std::borrow::Cow;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -208,12 +197,6 @@ pub type UncheckedExtrinsic =
         TxExtension,
     >;
 
-/// All migrations of the runtime, aside from the ones declared in the pallets.
-///
-/// This can be a tuple of types, each implementing `OnRuntimeUpgrade`.
-#[allow(unused_parens)]
-type Migrations = ();
-
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -281,8 +264,8 @@ impl_opaque_keys! {
 
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("xode-runtime"),
-	impl_name: create_runtime_str!("xode-runtime"),
+	spec_name: Cow::Borrowed("xode-runtime"),
+	impl_name: Cow::Borrowed("xode-runtime"),
 	authoring_version: 1,
 	spec_version: 12,
 	impl_version: 0,

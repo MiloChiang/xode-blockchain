@@ -253,7 +253,7 @@ pub async fn start_parachain_node(
 	let backend = params.backend.clone();
 	let mut task_manager = params.task_manager;
 
-	let (relay_chain_interface, collator_key, relay_chain_network, paranode_rx) =
+	let (relay_chain_interface, collator_key, _relay_chain_network, _paranode_rx) =
 		build_relay_chain_interface(
 			polkadot_config,
 			&parachain_config,
@@ -271,6 +271,7 @@ pub async fn start_parachain_node(
 
 	// NOTE: because we use Aura here explicitly, we can use `CollatorSybilResistance::Resistant`
 	// when starting the network.
+
 	let (network, system_rpc_tx, tx_handler_controller, sync_service) =
 		build_network(BuildNetworkParams {
 			parachain_config: &parachain_config,

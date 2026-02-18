@@ -39,7 +39,7 @@ mod genesis_config_presets;
 mod weights;
 
 extern crate alloc;
-use alloc::{vec::Vec, sync::Arc};
+use alloc::{vec, vec::Vec, sync::Arc};
 use smallvec::smallvec;
 
 #[cfg(any(feature = "std", test))]
@@ -100,7 +100,6 @@ use xcm_runtime_apis::{
 
 /// Revive
 use pallet_revive::evm::runtime::EthExtra;
-use sp_std::vec;
 
 use sp_std::borrow::Cow;
 
@@ -161,7 +160,7 @@ const CONTRACTS_DEBUG_OUTPUT: pallet_contracts::DebugInfo =
     pallet_contracts::DebugInfo::UnsafeDebug;
 const CONTRACTS_EVENTS: pallet_contracts::CollectEvents =
     pallet_contracts::CollectEvents::UnsafeCollect;
-
+	
 /// EthExtra converts an unsigned Call::eth_transact into a CheckedExtrinsic.
 /// Default extensions applied to Ethereum transactions.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -190,7 +189,7 @@ impl EthExtra for EthExtraImpl {
 
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
-    sp_runtime::generic::UncheckedExtrinsic<
+	sp_runtime::generic::UncheckedExtrinsic<
         Address,
         RuntimeCall,
         Signature,
@@ -406,7 +405,7 @@ mod runtime {
 
 	// Frames (Xode Blockchain)
 	#[runtime::pallet_index(50)]
-	pub type Assets = pallet_assets;
+	pub type Assets = pallet_assets::Pallet<Runtime, Instance1>;
 	#[runtime::pallet_index(51)]
 	pub type Contracts = pallet_contracts;
 	#[runtime::pallet_index(52)]
@@ -441,6 +440,22 @@ mod runtime {
 	// Revive
     #[runtime::pallet_index(90)]
     pub type Revive = pallet_revive;
+
+	// Asset Conversion
+	#[runtime::pallet_index(100)]
+  pub type AssetConversion = pallet_asset_conversion;
+	#[runtime::pallet_index(101)]
+  pub type ForeignAssets = pallet_assets::Pallet<Runtime, Instance2>;
+	#[runtime::pallet_index(102)]
+  pub type PoolAssets = pallet_assets::Pallet<Runtime, Instance3>;
+	#[runtime::pallet_index(103)]
+  pub type AssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance1>;
+	#[runtime::pallet_index(104)]
+  pub type ForeignAssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance2>;
+	#[runtime::pallet_index(105)]
+  pub type PoolAssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance3>;
+	#[runtime::pallet_index(106)] 
+  pub type AssetConversionOps = pallet_asset_conversion_ops;
 }
 
 #[docify::export(register_validate_block)]
@@ -488,11 +503,11 @@ impl Runtime {
 	}
 }
 
-pallet_revive::impl_runtime_apis_plus_revive_traits!(
-    Runtime,
-    Revive,
-    Executive,
-    EthExtraImpl,      
+pallet_revive::impl_runtime_apis_plus_revive_traits! (
+	Runtime,
+	Revive,
+	Executive,
+	EthExtraImpl,
 
 	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
 		fn slot_duration() -> sp_consensus_aura::SlotDuration {
@@ -902,5 +917,5 @@ pallet_revive::impl_runtime_apis_plus_revive_traits!(
 				LocationToAccountId,
 			>::convert_location(location)
 		}
-	}	
+	}
 );

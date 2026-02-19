@@ -189,12 +189,7 @@ impl EthExtra for EthExtraImpl {
 
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
-	sp_runtime::generic::UncheckedExtrinsic<
-        Address,
-        RuntimeCall,
-        Signature,
-        TxExtension,
-    >;
+	pallet_revive::evm::runtime::UncheckedExtrinsic<Address, Signature, EthExtraImpl>;
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<

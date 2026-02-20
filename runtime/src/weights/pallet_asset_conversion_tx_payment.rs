@@ -48,6 +48,7 @@ use frame_support::{traits::Get, weights::Weight};
 use core::marker::PhantomData;
 
 /// Weight functions for `pallet_asset_conversion_tx_payment`.
+#[allow(dead_code)]
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Config> pallet_asset_conversion_tx_payment::WeightInfo for WeightInfo<T> {
 	fn charge_asset_tx_payment_zero() -> Weight {

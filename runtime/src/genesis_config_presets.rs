@@ -20,7 +20,7 @@ use sp_keyring::Sr25519Keyring;
 const SAFE_XCM_VERSION: u32 = xcm::prelude::XCM_VERSION;
 
 #[docify::export_content]
-pub const PARACHAIN_ID: u32 = 4607;
+pub const PARACHAIN_ID: u32 = 3417;
 
 /// Generate the session keys from individual elements.
 ///

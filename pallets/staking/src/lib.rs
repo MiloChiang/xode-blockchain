@@ -53,7 +53,6 @@ pub mod pallet {
 	use sp_runtime::traits::Zero;
 	use sp_runtime::Saturating;
 	use scale_info::prelude::vec::Vec;
-	use scale_info::prelude::vec;
 	use hex::decode;
 	use frame_support::PalletId;
 	

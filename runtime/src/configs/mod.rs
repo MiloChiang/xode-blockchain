@@ -1039,7 +1039,6 @@ impl pallet_xode_staking::Config for Runtime {
 /// =======
 /// Utility
 /// =======
-
 impl pallet_root_testing::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 }

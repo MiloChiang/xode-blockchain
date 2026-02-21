@@ -356,7 +356,7 @@ pub mod pallet {
 
 			// Minimum bond checked
 			ensure!(
-                new_bond > T::MinProposedCandidateBond::get(),
+                new_bond >= T::MinProposedCandidateBond::get(),
                 Error::<T>::ProposedCandidateInsufficientBond
             );
 
